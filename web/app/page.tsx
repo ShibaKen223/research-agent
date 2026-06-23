@@ -13,6 +13,7 @@ export default function Home() {
   const [reports, setReports] = useState<ReportSummary[] | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollFailuresRef = useRef(0);
 
   useEffect(() => {
     listReports().then(setReports).catch(() => setReports([]));
@@ -27,15 +28,29 @@ export default function Home() {
   const handleSearch = async (keyword: string, limit: number) => {
     const { job_id } = await startSearch(keyword, limit);
     setJob({ status: "searching", message: "排隊中...", report_filename: null });
+    pollFailuresRef.current = 0;
 
     pollRef.current = setInterval(async () => {
-      const latest = await getJob(job_id);
-      setJob(latest);
-      if (latest.status === "done" && latest.report_filename) {
-        if (pollRef.current) clearInterval(pollRef.current);
-        router.push(`/reports/${encodeURIComponent(latest.report_filename)}`);
-      } else if (latest.status === "error") {
-        if (pollRef.current) clearInterval(pollRef.current);
+      try {
+        const latest = await getJob(job_id);
+        pollFailuresRef.current = 0;
+        setJob(latest);
+        if (latest.status === "done" && latest.report_filename) {
+          if (pollRef.current) clearInterval(pollRef.current);
+          router.push(`/reports/${encodeURIComponent(latest.report_filename)}`);
+        } else if (latest.status === "error") {
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
+      } catch (e) {
+        pollFailuresRef.current += 1;
+        if (pollFailuresRef.current >= 3) {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setJob({
+            status: "error",
+            message: "與伺服器失去連線，請確認後端是否仍在執行。",
+            report_filename: null,
+          });
+        }
       }
     }, 1200);
   };

@@ -7,6 +7,7 @@ import requests
 SEARCH_URL = "https://api.semanticscholar.org/graph/v1/paper/search"
 FIELDS = "title,authors,year,abstract,url,venue,citationCount"
 MAX_RETRIES = 4
+HEADERS = {"User-Agent": "research-agent/0.1.0 (https://github.com/research-agent)"}
 
 
 class SemanticScholarError(RuntimeError):
@@ -22,7 +23,7 @@ def search_papers(query: str, limit: int = 20) -> list[dict]:
     params = {"query": query, "limit": limit, "fields": FIELDS}
 
     for attempt in range(MAX_RETRIES + 1):
-        resp = requests.get(SEARCH_URL, params=params, timeout=30)
+        resp = requests.get(SEARCH_URL, params=params, headers=HEADERS, timeout=30)
         if resp.status_code != 429:
             break
         if attempt == MAX_RETRIES:

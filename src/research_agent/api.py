@@ -5,6 +5,8 @@ and exposes saved reports for the dashboard. Job state lives in an in-memory
 dict — fine for a single-user local tool, cleared on restart.
 """
 
+import os
+import time
 import uuid
 from pathlib import Path
 from typing import Literal
@@ -37,12 +39,14 @@ app.add_middleware(
 )
 
 JobStatus = Literal["searching", "analyzing", "writing", "done", "error"]
+JOB_TTL_SECONDS = 1800
 
 
 class Job(BaseModel):
     status: JobStatus
     message: str = ""
     report_filename: str | None = None
+    created_at: float = 0.0
 
 
 class SearchRequest(BaseModel):
@@ -55,16 +59,34 @@ jobs: dict[str, Job] = {}
 
 
 def _reports_folder() -> Path:
-    return Path.cwd()
+    override = os.environ.get("REPORTS_DIR")
+    return Path(override) if override else Path.cwd()
+
+
+def _set_job(job_id: str, status: JobStatus, message: str = "", report_filename: str | None = None):
+    created_at = jobs[job_id].created_at if job_id in jobs else time.time()
+    jobs[job_id] = Job(
+        status=status, message=message, report_filename=report_filename, created_at=created_at
+    )
+
+
+def _cleanup_jobs():
+    cutoff = time.time() - JOB_TTL_SECONDS
+    expired = [job_id for job_id, job in jobs.items() if job.created_at < cutoff]
+    for job_id in expired:
+        del jobs[job_id]
 
 
 def _report_path(filename: str) -> Path:
-    path = (_reports_folder() / filename).resolve()
-    if path.parent != _reports_folder().resolve() or not path.name.endswith(".md"):
+    if "/" in filename or "\\" in filename or not filename.endswith(".md"):
         raise HTTPException(status_code=400, detail="invalid filename")
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="report not found")
-    return path
+
+    base = _reports_folder().resolve()
+    for candidate_dir in (base, base / "reports"):
+        path = (candidate_dir / filename).resolve()
+        if path.parent == candidate_dir and path.exists():
+            return path
+    raise HTTPException(status_code=404, detail="report not found")
 
 
 @app.get("/api/reports")
@@ -124,37 +146,39 @@ def download_report(filename: str):
 
 def _run_search_job(job_id: str, keyword: str, limit: int, model: str):
     try:
-        jobs[job_id] = Job(status="searching", message=f"在 Semantic Scholar 搜尋「{keyword}」...")
+        _set_job(job_id, "searching", f"在 Semantic Scholar 搜尋「{keyword}」...")
         papers = search_papers(keyword, limit=limit)
         if not papers:
-            jobs[job_id] = Job(status="error", message="找不到含摘要的相關論文，請換個關鍵字試試。")
+            _set_job(job_id, "error", "找不到含摘要的相關論文，請換個關鍵字試試。")
             return
 
-        jobs[job_id] = Job(status="analyzing", message=f"使用 Claude ({model}) 分析 {len(papers)} 篇論文...")
+        _set_job(job_id, "analyzing", f"使用 Claude ({model}) 分析 {len(papers)} 篇論文...")
         analysis = analyze(keyword, papers, model=model)
 
-        jobs[job_id] = Job(status="writing", message="正在產生報告...")
+        _set_job(job_id, "writing", "正在產生報告...")
         report = build_report(keyword, len(papers), analysis)
         out_path = _reports_folder() / f"{keyword}_report.md"
         out_path.write_text(report, encoding="utf-8")
 
-        jobs[job_id] = Job(status="done", message="完成！", report_filename=out_path.name)
+        _set_job(job_id, "done", "完成！", report_filename=out_path.name)
     except SemanticScholarError as e:
-        jobs[job_id] = Job(status="error", message=str(e))
+        _set_job(job_id, "error", str(e))
     except RuntimeError as e:
-        jobs[job_id] = Job(status="error", message=str(e))
+        _set_job(job_id, "error", str(e))
 
 
 @app.post("/api/search")
 def start_search(req: SearchRequest, background_tasks: BackgroundTasks):
+    _cleanup_jobs()
     job_id = str(uuid.uuid4())
-    jobs[job_id] = Job(status="searching", message="排隊中...")
+    _set_job(job_id, "searching", "排隊中...")
     background_tasks.add_task(_run_search_job, job_id, req.keyword, req.limit, req.model)
     return {"job_id": job_id}
 
 
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str):
+    _cleanup_jobs()
     job = jobs.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")

@@ -5,6 +5,7 @@ import os
 import anthropic
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
+MAX_TOKENS = 8192
 
 PROMPT_TEMPLATE = """\
 你是一位學術研究助理，請根據以下關於「{keyword}」的論文清單，撰寫一份繁體中文的研究分析報告（Markdown 格式）。
@@ -43,7 +44,7 @@ def analyze(keyword: str, papers: list[dict], model: str = DEFAULT_MODEL) -> str
 
     message = client.messages.create(
         model=model,
-        max_tokens=4096,
+        max_tokens=MAX_TOKENS,
         messages=[{"role": "user", "content": prompt}],
     )
     return "".join(block.text for block in message.content if block.type == "text")
