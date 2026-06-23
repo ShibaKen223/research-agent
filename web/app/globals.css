@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+/* Tailwind's glob-based content scanner treats the `[filename]` bracket in
+   the dynamic route folder name as a glob character class, so it silently
+   skips app/reports/[filename]/page.tsx. Escape the brackets so they're
+   matched literally instead. */
+@source "../app/reports/\[filename\]/*.{ts,tsx}";
+
+:root {
+  --background: #0b1120;
+  --surface: #111827;
+  --surface-hover: #1a2435;
+  --border: #243042;
+  --foreground: #e5e9f0;
+  --muted: #8b96a8;
+  --accent: #f5b942;
+  --accent-foreground: #0b1120;
+  --teal: #2dd4bf;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-teal: var(--teal);
+  --font-sans: var(--font-sans);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+table {
+  border-collapse: collapse;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 6px;
+}

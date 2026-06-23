@@ -1,0 +1,26 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+build/
+dist/
+reports/
+*_report.md
+
+# Node / web frontend
+node_modules/
+web/.next/
+web/.env.local
+web/tsconfig.tsbuildinfo
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# scratch/design/debug artifacts (root-level only)
+/*.log
+/*.png
+/shot*.mjs
+/full.css
+/claude_design_prompts.md
+/desktop.ini
