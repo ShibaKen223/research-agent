@@ -24,8 +24,8 @@ export function SearchStepper({
   const failed = status === "error";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-8 shadow-lg">
         <h2 className="mb-6 text-lg font-semibold">
           {failed ? "搜尋失敗" : "正在產生研究報告"}
         </h2>
@@ -35,16 +35,21 @@ export function SearchStepper({
             const active = !failed && i === current;
             return (
               <li key={step.key} className="flex items-center gap-3">
-                <span
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm ${
-                    done
-                      ? "border-teal bg-teal/20 text-teal"
-                      : active
-                        ? "border-accent bg-accent/20 text-accent"
-                        : "border-border text-muted"
-                  }`}
-                >
-                  {done ? "✓" : step.icon}
+                <span className="relative flex h-6 w-6 shrink-0 items-center justify-center">
+                  {active && (
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent/40" />
+                  )}
+                  <span
+                    className={`relative flex h-6 w-6 items-center justify-center rounded-full border text-xs ${
+                      done
+                        ? "border-teal bg-teal/10 text-teal"
+                        : active
+                          ? "border-accent bg-accent/10 text-accent"
+                          : "border-border text-muted"
+                    }`}
+                  >
+                    {done ? "✓" : step.icon}
+                  </span>
                 </span>
                 <span className={active ? "text-foreground" : "text-muted"}>{step.label}</span>
               </li>

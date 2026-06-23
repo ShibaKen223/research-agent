@@ -58,25 +58,36 @@ export default function Home() {
   const isEmpty = reports !== null && reports.length === 0;
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-6 py-16">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">📚 Research Agent</h1>
-        <p className="mt-1 text-muted">輸入關鍵字，搜尋文獻並產出 AI 研究分析報告</p>
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-8 py-20">
+      <header className="mb-20 flex flex-col gap-6">
+        <p className="label-sm">Research Tool</p>
+        <h1 className="font-display text-6xl leading-[1.1] tracking-tight sm:text-7xl">
+          Research<br />Agent
+        </h1>
+        <p className="max-w-md text-lg text-muted">
+          輸入關鍵字，搜尋文獻並產出 AI 研究分析報告
+        </p>
       </header>
 
       <SearchBar onSearch={handleSearch} disabled={job !== null && job.status !== "error"} />
 
       {isEmpty ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border py-24 text-center">
-          <span className="text-5xl">🔭</span>
-          <p className="text-lg text-foreground">還沒有任何報告</p>
-          <p className="text-muted">輸入關鍵字，開始你的第一份研究分析</p>
+        <div className="mt-20 flex flex-col items-start gap-3">
+          <p className="label-sm">No reports yet</p>
+          <p className="text-2xl text-muted">輸入關鍵字，開始你的第一份研究分析</p>
         </div>
       ) : (
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {reports?.map((r) => (
-            <ReportCard key={r.filename} report={r} />
-          ))}
+        <section className="mt-16 flex flex-col gap-8">
+          <div className="flex items-baseline justify-between">
+            <p className="label-sm">已產出的報告</p>
+            <p className="label-sm">{reports?.length} reports</p>
+          </div>
+          <div className="border-t border-border" />
+          <div className="flex flex-col gap-0">
+            {reports?.map((r, i) => (
+              <ReportCard key={r.filename} report={r} index={i} />
+            ))}
+          </div>
         </section>
       )}
 

@@ -35,7 +35,7 @@ export function MatrixTable({
   return (
     <div className="flex flex-col gap-6">
       <input
-        className="w-full max-w-sm rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+        className="w-full max-w-sm border-b border-border bg-transparent px-1 py-2 text-sm outline-none focus:border-accent"
         placeholder="搜尋表格內容..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -43,12 +43,12 @@ export function MatrixTable({
 
       <div className="overflow-x-auto rounded-xl border border-border">
         <table className="w-full text-left text-sm">
-          <thead className="bg-surface-hover text-muted">
+          <thead className="bg-transparent">
             <tr>
               {columns.map((col) => (
                 <th
                   key={col}
-                  className="cursor-pointer select-none whitespace-nowrap px-4 py-3 hover:text-foreground"
+                  className="label-sm cursor-pointer select-none whitespace-nowrap px-4 py-3 hover:text-foreground"
                   onClick={() => {
                     if (sortCol === col) setSortAsc(!sortAsc);
                     else {

@@ -1,27 +1,24 @@
 import Link from "next/link";
 import type { ReportSummary } from "@/lib/types";
 
-const SECTION_ICONS = ["📑", "📈", "🕳️", "🎓"];
-
-export function ReportCard({ report }: { report: ReportSummary }) {
+export function ReportCard({ report, index = 0 }: { report: ReportSummary; index?: number }) {
+  const num = String(index + 1).padStart(2, "0");
   return (
     <Link
       href={`/reports/${encodeURIComponent(report.filename)}`}
-      className="group flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5 transition hover:border-accent hover:bg-surface-hover"
+      style={{ animationDelay: `${index * 60}ms` }}
+      className="animate-fade-in-up group flex items-baseline gap-8 border-b border-border py-6 transition-colors hover:bg-surface-hover"
     >
-      <h3 className="truncate text-lg font-semibold text-foreground group-hover:text-accent">
-        {report.keyword}
-      </h3>
-      <div className="flex items-center gap-4 text-sm text-muted">
-        <span>{report.date ?? "—"}</span>
-        <span>{report.paper_count ?? "—"} 篇論文</span>
-      </div>
-      <div className="mt-auto flex gap-2 text-xl">
-        {SECTION_ICONS.map((icon) => (
-          <span key={icon} className="opacity-70">
-            {icon}
-          </span>
-        ))}
+      <span className="label-sm w-8 shrink-0">{num}</span>
+      <div className="flex flex-1 items-baseline justify-between gap-4">
+        <h3 className="font-display text-3xl tracking-tight group-hover:text-accent sm:text-4xl">
+          {report.keyword}
+        </h3>
+        <div className="flex items-center gap-6">
+          <span className="label-sm hidden sm:inline">{report.paper_count ?? "—"} papers</span>
+          <span className="label-sm">{report.date ?? "—"}</span>
+          <span className="text-accent transition-transform group-hover:translate-x-1">→</span>
+        </div>
       </div>
     </Link>
   );

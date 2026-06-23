@@ -24,7 +24,7 @@ export function ThesisCard({ item, filename }: { item: MarkdownItem; filename: s
   };
 
   return (
-    <div className="relative rounded-2xl border border-border bg-surface p-5">
+    <div className="hover-glow relative rounded-2xl border border-border bg-surface p-5 transition-all duration-200 hover:border-border-hover">
       <button
         onClick={toggle}
         aria-label="收藏"
@@ -35,7 +35,7 @@ export function ThesisCard({ item, filename }: { item: MarkdownItem; filename: s
         {bookmarked ? "★" : "☆"}
       </button>
       <h3 className="mb-2 flex items-center gap-2 pr-8 font-semibold text-foreground">
-        <span className="text-accent">🎓</span>
+        <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />
         {item.heading}
       </h3>
       <div className="prose-sm text-sm leading-relaxed text-muted [&_strong]:text-foreground [&_blockquote]:border-l-2 [&_blockquote]:border-accent [&_blockquote]:pl-3 [&_blockquote]:text-foreground/80">

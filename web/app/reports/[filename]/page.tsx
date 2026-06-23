@@ -12,13 +12,6 @@ import { ThesisCard } from "@/components/ThesisCard";
 import type { ReportDetail } from "@/lib/types";
 import { useRouter } from "next/navigation";
 
-const SECTION_ICONS: Record<string, string> = {
-  文獻矩陣: "📑",
-  研究趨勢: "📈",
-  研究缺口: "🕳️",
-  碩論題目建議: "🎓",
-};
-
 export default function ReportPage({
   params,
 }: {
@@ -66,52 +59,86 @@ export default function ReportPage({
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-6 py-12">
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-8 py-12">
       <div>
-        <nav className="text-sm text-muted">
+        <nav className="label-sm">
           <Link href="/" className="hover:text-accent">
             首頁
           </Link>{" "}
-          / <span className="text-foreground">{report.meta.關鍵字 ?? report.filename}</span>
+          › <span className="text-foreground">{report.meta.關鍵字 ?? report.filename}</span>
         </nav>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{report.meta.關鍵字}</h1>
-            <div className="mt-2 flex gap-4 text-sm text-muted">
-              <span>📅 {report.meta.產生日期}</span>
-              <span>📄 {report.meta.分析論文數量} 篇論文</span>
+            <h1 className="font-display text-5xl tracking-tight sm:text-6xl">
+              {report.meta.關鍵字}
+            </h1>
+            <div className="label-sm mt-3 flex gap-3">
+              <span>{report.meta.產生日期}</span>
+              <span>·</span>
+              <span>{report.meta.分析論文數量} 篇論文</span>
+              <span>·</span>
               <span>來源：Semantic Scholar</span>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             <a
               href={downloadUrl(report.filename)}
-              className="rounded-xl border border-border px-4 py-2 text-sm hover:bg-surface-hover"
+              aria-label="下載 Markdown"
+              title="下載 Markdown"
+              className="rounded-lg p-2 text-muted transition hover:text-accent"
             >
-              ⬇️ 下載 Markdown
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 3v12" />
+                <path d="m7 10 5 5 5-5" />
+                <path d="M5 21h14" />
+              </svg>
             </a>
             <button
               onClick={handleDelete}
-              className="rounded-xl border border-border px-4 py-2 text-sm text-red-400 hover:bg-surface-hover"
+              aria-label="刪除"
+              title="刪除"
+              className="rounded-lg p-2 text-muted transition hover:text-accent"
             >
-              🗑️ 刪除
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 6h18" />
+                <path d="M8 6V4h8v2" />
+                <path d="M19 6l-1 14H6L5 6" />
+              </svg>
             </button>
           </div>
         </div>
       </div>
 
-      <div className="sticky top-0 z-10 -mx-6 flex gap-2 bg-background px-6 py-3">
+      <div className="sticky top-0 z-10 -mx-8 flex gap-8 border-b border-border bg-background px-8 pt-2">
         {report.section_order.map((title) => (
           <button
             key={title}
             onClick={() => setActiveTab(title)}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+            className={`-mb-px border-b-2 pb-4 text-sm transition ${
               activeTab === title
-                ? "bg-accent text-accent-foreground"
-                : "text-muted hover:bg-surface-hover hover:text-foreground"
+                ? "border-accent font-medium text-foreground"
+                : "border-transparent text-muted hover:text-foreground"
             }`}
           >
-            {SECTION_ICONS[title] ?? "📄"} {title}
+            {title}
           </button>
         ))}
       </div>
