@@ -5,7 +5,7 @@ __pycache__/
 *.egg-info/
 build/
 dist/
-reports/
+/reports/
 *_report.md
 
 # Node / web frontend
