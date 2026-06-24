@@ -1,4 +1,4 @@
-import type { Job, ReportDetail, ReportSummary } from "./types";
+import type { Job, ReportDetail, ReportSummary, SearchOptions } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -27,11 +27,22 @@ export function downloadUrl(filename: string): string {
   return `${BASE_URL}/api/reports/${encodeURIComponent(filename)}/download`;
 }
 
-export function startSearch(keyword: string, limit: number): Promise<{ job_id: string }> {
+export function startSearch(
+  keyword: string,
+  limit: number,
+  options?: SearchOptions
+): Promise<{ job_id: string }> {
   return request("/api/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ keyword, limit }),
+    body: JSON.stringify({
+      keyword,
+      limit,
+      sort: options?.sort ?? "relevance",
+      min_citations: options?.minCitations ?? 0,
+      year_from: options?.yearFrom ?? null,
+      translate: options?.translate ?? false,
+    }),
   });
 }
 

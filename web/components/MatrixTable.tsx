@@ -10,7 +10,7 @@ export function MatrixTable({
   rows: Record<string, string>[];
   yearCounts: Record<string, number>;
 }) {
-  const columns = Object.keys(rows[0] ?? {});
+  const columns = useMemo(() => Object.keys(rows[0] ?? {}), [rows]);
   const [query, setQuery] = useState("");
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortAsc, setSortAsc] = useState(true);

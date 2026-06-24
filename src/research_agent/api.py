@@ -18,7 +18,8 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from research_agent.analyzer import DEFAULT_MODEL, analyze
-from research_agent.report import build_report
+from research_agent.query import SPARSE_RESULT_THRESHOLD, suggest_keywords, translate_to_english_query
+from research_agent.report import build_report, unique_report_path
 from research_agent.report_parser import (
     SECTION_ORDER,
     find_reports,
@@ -47,12 +48,17 @@ class Job(BaseModel):
     message: str = ""
     report_filename: str | None = None
     created_at: float = 0.0
+    suggestions: list[str] | None = None
 
 
 class SearchRequest(BaseModel):
     keyword: str
     limit: int = 20
     model: str = DEFAULT_MODEL
+    sort: Literal["relevance", "citations"] = "relevance"
+    min_citations: int = 0
+    year_from: int | None = None
+    translate: bool = False
 
 
 jobs: dict[str, Job] = {}
@@ -63,10 +69,25 @@ def _reports_folder() -> Path:
     return Path(override) if override else Path.cwd()
 
 
-def _set_job(job_id: str, status: JobStatus, message: str = "", report_filename: str | None = None):
-    created_at = jobs[job_id].created_at if job_id in jobs else time.time()
+def _set_job(
+    job_id: str,
+    status: JobStatus,
+    message: str = "",
+    report_filename: str | None = None,
+    suggestions: list[str] | None = None,
+):
+    existing = jobs.get(job_id)
+    created_at = existing.created_at if existing else time.time()
+    # Once computed, suggestions ride along through later status updates for the
+    # same job unless a call explicitly overrides them.
+    if suggestions is None and existing is not None:
+        suggestions = existing.suggestions
     jobs[job_id] = Job(
-        status=status, message=message, report_filename=report_filename, created_at=created_at
+        status=status,
+        message=message,
+        report_filename=report_filename,
+        created_at=created_at,
+        suggestions=suggestions,
     )
 
 
@@ -144,23 +165,75 @@ def download_report(filename: str):
     )
 
 
-def _run_search_job(job_id: str, keyword: str, limit: int, model: str):
+def _run_search_job(
+    job_id: str,
+    keyword: str,
+    limit: int,
+    model: str,
+    sort: str,
+    min_citations: int,
+    year_from: int | None,
+    translate: bool = False,
+):
     try:
-        _set_job(job_id, "searching", f"在 Semantic Scholar 搜尋「{keyword}」...")
-        papers = search_papers(keyword, limit=limit)
-        if not papers:
-            _set_job(job_id, "error", "找不到含摘要的相關論文，請換個關鍵字試試。")
-            return
+        query = keyword
+        translated_from = None
+        if translate:
+            try:
+                query = translate_to_english_query(keyword)
+            except Exception:  # noqa: BLE001 — fall back to the original keyword, don't fail the job
+                query = keyword
+            if query != keyword:
+                translated_from = keyword
 
-        _set_job(job_id, "analyzing", f"使用 Claude ({model}) 分析 {len(papers)} 篇論文...")
+        _set_job(job_id, "searching", f"在 Semantic Scholar 搜尋「{query}」...")
+        result = search_papers(
+            query, limit=limit, sort=sort, min_citations=min_citations, year_from=year_from
+        )
+
+        suggestions = None
+        if len(result.papers) < SPARSE_RESULT_THRESHOLD:
+            try:
+                suggestions = suggest_keywords(keyword) or None
+            except Exception:  # noqa: BLE001 — suggestions are a nice-to-have, never fail the job for them
+                suggestions = None
+
+        if not result.papers:
+            _set_job(
+                job_id,
+                "error",
+                "找不到含摘要的相關論文，請換個關鍵字試試。",
+                suggestions=suggestions,
+            )
+            return
+        papers = result.papers
+        sparse_note = f"（只找到 {len(papers)} 篇，可參考下方建議關鍵字。）" if suggestions else ""
+
+        _set_job(
+            job_id,
+            "analyzing",
+            f"使用 Claude ({model}) 分析 {len(papers)} 篇論文...{sparse_note}",
+            suggestions=suggestions,
+        )
         analysis = analyze(keyword, papers, model=model)
 
         _set_job(job_id, "writing", "正在產生報告...")
-        report = build_report(keyword, len(papers), analysis)
-        out_path = _reports_folder() / f"{keyword}_report.md"
+        report = build_report(
+            keyword,
+            len(papers),
+            analysis,
+            query=query,
+            translated_from=translated_from,
+            sort=sort,
+            min_citations=min_citations,
+            year_from=year_from,
+            model=model,
+            stats=result,
+        )
+        out_path = unique_report_path(_reports_folder(), keyword)
         out_path.write_text(report, encoding="utf-8")
 
-        _set_job(job_id, "done", "完成！", report_filename=out_path.name)
+        _set_job(job_id, "done", f"完成！{sparse_note}", report_filename=out_path.name)
     except SemanticScholarError as e:
         _set_job(job_id, "error", str(e))
     except RuntimeError as e:
@@ -172,7 +245,17 @@ def start_search(req: SearchRequest, background_tasks: BackgroundTasks):
     _cleanup_jobs()
     job_id = str(uuid.uuid4())
     _set_job(job_id, "searching", "排隊中...")
-    background_tasks.add_task(_run_search_job, job_id, req.keyword, req.limit, req.model)
+    background_tasks.add_task(
+        _run_search_job,
+        job_id,
+        req.keyword,
+        req.limit,
+        req.model,
+        req.sort,
+        req.min_citations,
+        req.year_from,
+        req.translate,
+    )
     return {"job_id": job_id}
 
 

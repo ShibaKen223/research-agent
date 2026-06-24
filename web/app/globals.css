@@ -7,16 +7,17 @@
 @source "../app/reports/\[filename\]/*.{ts,tsx}";
 
 :root {
-  --background: #f0ebe3;
-  --surface: #ffffff;
-  --surface-hover: #e8e3db;
-  --border: #d4cfc7;
-  --border-hover: #b8b2a8;
-  --foreground: #1a1a1a;
-  --muted: #7a756d;
-  --accent: #e63927;
-  --accent-foreground: #ffffff;
-  --accent-glow: rgba(230, 57, 39, 0.1);
+  --background: #ece7df;
+  --surface: #f5f1e9;
+  --surface-hover: #e3dccd;
+  --border: #e0d8cb;
+  --border-hover: #c9c0b2;
+  --foreground: #1b1714;
+  --muted: #9a8e7e;
+  --muted-strong: #6e6357;
+  --accent: #da4b26;
+  --accent-foreground: #fcf7ef;
+  --accent-glow: rgba(218, 75, 38, 0.1);
   --teal: #2a7a6f;
 }
 
@@ -28,12 +29,14 @@
   --color-border-hover: var(--border-hover);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
+  --color-muted-strong: var(--muted-strong);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent-glow: var(--accent-glow);
   --color-teal: var(--teal);
-  --font-sans: var(--font-sans), system-ui, sans-serif;
-  --font-serif: var(--font-serif), Georgia, serif;
+  --font-sans: var(--font-sans), "Noto Sans TC", system-ui, sans-serif;
+  --font-serif: var(--font-serif), "Noto Serif TC", Georgia, serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
 }
 
 body {
@@ -83,6 +86,38 @@ table tr {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+@keyframes ra-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ra-corner {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  border-color: var(--border-hover);
+  pointer-events: none;
+}
+
+.ra-row:hover .ra-arrow {
+  transform: translateX(8px);
+  color: var(--accent);
+}
+
+.ra-row:hover .ra-title {
+  color: var(--accent);
+}
+
+.ra-row:hover .ra-rule {
+  background: var(--accent);
+}
+
+.ra-nav:hover {
+  color: var(--accent);
 }
 
 ::-webkit-scrollbar {
