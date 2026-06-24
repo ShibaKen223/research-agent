@@ -1,7 +1,7 @@
 import type { JobStatus } from "@/lib/types";
 
 const STEPS: { key: JobStatus; label: string; icon: string }[] = [
-  { key: "searching", label: "正在搜尋 Semantic Scholar", icon: "1" },
+  { key: "searching", label: "正在搜尋 Semantic Scholar、OpenAlex", icon: "1" },
   { key: "analyzing", label: "AI 正在分析論文", icon: "2" },
   { key: "writing", label: "正在產生報告", icon: "3" },
 ];

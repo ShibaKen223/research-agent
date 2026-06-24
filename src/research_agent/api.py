@@ -27,7 +27,8 @@ from research_agent.report_parser import (
     parse_report,
     year_distribution,
 )
-from research_agent.semantic_scholar import SemanticScholarError, search_papers
+from research_agent.sources import SearchError, search
+from research_agent.verify import verify_matrix
 
 load_dotenv()
 
@@ -186,8 +187,8 @@ def _run_search_job(
             if query != keyword:
                 translated_from = keyword
 
-        _set_job(job_id, "searching", f"在 Semantic Scholar 搜尋「{query}」...")
-        result = search_papers(
+        _set_job(job_id, "searching", f"在 Semantic Scholar、OpenAlex 搜尋「{query}」...")
+        result = search(
             query, limit=limit, sort=sort, min_citations=min_citations, year_from=year_from
         )
 
@@ -216,6 +217,7 @@ def _run_search_job(
             suggestions=suggestions,
         )
         analysis = analyze(keyword, papers, model=model)
+        verification = verify_matrix(analysis, papers)
 
         _set_job(job_id, "writing", "正在產生報告...")
         report = build_report(
@@ -229,14 +231,13 @@ def _run_search_job(
             year_from=year_from,
             model=model,
             stats=result,
+            verification=verification,
         )
         out_path = unique_report_path(_reports_folder(), keyword)
         out_path.write_text(report, encoding="utf-8")
 
         _set_job(job_id, "done", f"完成！{sparse_note}", report_filename=out_path.name)
-    except SemanticScholarError as e:
-        _set_job(job_id, "error", str(e))
-    except RuntimeError as e:
+    except (SearchError, RuntimeError) as e:
         _set_job(job_id, "error", str(e))
 
 

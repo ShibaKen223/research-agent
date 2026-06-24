@@ -58,5 +58,12 @@ def analyze(keyword: str, papers: list[dict], model: str = DEFAULT_MODEL) -> str
     return "".join(block.text for block in message.content if block.type == "text")
 
 
+# Only the fields the prompt/矩陣 actually use. Internal fields added for
+# de-duplication and verification (doi, source, paper_id) are deliberately left
+# out so they can't leak into the matrix or inflate the token count.
+_PROMPT_FIELDS = ("title", "authors", "year", "abstract", "url", "venue", "citation_count")
+
+
 def _papers_to_json(papers: list[dict]) -> str:
-    return json.dumps(papers, ensure_ascii=False, indent=2)
+    slim = [{k: p.get(k) for k in _PROMPT_FIELDS} for p in papers]
+    return json.dumps(slim, ensure_ascii=False, indent=2)

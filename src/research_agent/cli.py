@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 from research_agent.analyzer import DEFAULT_MODEL, analyze
 from research_agent.query import SPARSE_RESULT_THRESHOLD, suggest_keywords, translate_to_english_query
 from research_agent.report import build_report, unique_report_path
-from research_agent.semantic_scholar import SemanticScholarError, search_papers
+from research_agent.sources import SearchError, search
+from research_agent.verify import verify_matrix
 
 
 @click.command()
@@ -62,12 +63,12 @@ def main(
             translated_from = keyword
             click.echo(f"已將「{keyword}」翻譯為英文檢索詞：{query}")
 
-    click.echo(f"[1/3] 在 Semantic Scholar 搜尋「{query}」...")
+    click.echo(f"[1/3] 在 Semantic Scholar、OpenAlex 搜尋「{query}」...")
     try:
-        result = search_papers(
+        result = search(
             query, limit=limit, sort=sort, min_citations=min_citations, year_from=year_from
         )
-    except SemanticScholarError as e:
+    except SearchError as e:
         click.echo(f"錯誤：{e}", err=True)
         sys.exit(1)
 
@@ -87,9 +88,18 @@ def main(
         sys.exit(1)
 
     papers = result.papers
-    click.echo(f"找到 {len(papers)} 篇含摘要的論文。")
+    source_note = ""
+    if result.sources:
+        source_note = "（" + "、".join(f"{n} {c} 篇" for n, c in result.sources.items()) + "）"
+    click.echo(f"找到 {len(papers)} 篇含摘要的論文。{source_note}")
     if result.excluded_no_abstract:
         click.echo(f"（另有 {result.excluded_no_abstract} 篇命中但因無摘要未納入。）")
+    if result.excluded_duplicates:
+        click.echo(f"（已合併 {result.excluded_duplicates} 篇跨資料庫重複的論文。）")
+    if result.failed_databases:
+        click.echo(
+            f"（注意：{'、'.join(result.failed_databases)} 查詢失敗，已改用其他來源。）", err=True
+        )
     if suggestions:
         click.echo("論文數較少，若想擴大搜尋範圍可以試試：")
         for s in suggestions:
@@ -102,6 +112,18 @@ def main(
         click.echo(f"錯誤：{e}", err=True)
         sys.exit(1)
 
+    verification = verify_matrix(analysis, papers)
+    if verification.checked and verification.unmatched_titles:
+        click.echo(
+            f"⚠️ 驗證：文獻矩陣有 {len(verification.unmatched_titles)} 列無法對應到實際檢索的論文，"
+            "已在報告「檢索說明」標註，請覆核。",
+            err=True,
+        )
+    elif verification.checked:
+        click.echo(
+            f"✅ 驗證：文獻矩陣 {verification.matched_rows}/{verification.total_rows} 列均對應到實際論文。"
+        )
+
     report = build_report(
         keyword,
         len(papers),
@@ -113,6 +135,7 @@ def main(
         year_from=year_from,
         model=model,
         stats=result,
+        verification=verification,
     )
 
     out_path = Path(output_path) if output_path else unique_report_path(Path.cwd(), keyword)

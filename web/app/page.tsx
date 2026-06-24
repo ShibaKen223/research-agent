@@ -189,7 +189,7 @@ export default function Home() {
       </main>
 
       <div className="label-sm absolute bottom-11 left-8 z-[3] sm:left-[60px]">
-        ARXIV · SEMANTIC SCHOLAR
+        SEMANTIC SCHOLAR · OPENALEX
       </div>
       <div className="label-sm absolute bottom-11 right-8 z-[3] text-accent sm:right-[60px]">
         POWERED BY CLAUDE

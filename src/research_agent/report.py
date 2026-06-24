@@ -21,15 +21,19 @@ def build_report(
     year_from: int | None = None,
     model: str | None = None,
     stats=None,
+    verification=None,
 ) -> str:
     """Assemble the final report.
 
     When `query` is given, a `## 檢索說明` appendix is appended documenting how
-    the report was produced (database, query, filters, model) and how many papers
+    the report was produced (databases, query, filters, model) and how many papers
     were found vs. excluded — a reproducible, auditable search record. `stats` is
-    the `SearchResult` from `search_papers` (used only for the exclusion counts).
+    the `SearchResult` from the search (used for the exclusion/dedup/source counts).
     `translated_from`, if set, is the original keyword the `query` was auto-translated
-    from, so the appendix can disclose that translation happened.
+    from, so the appendix can disclose that translation happened. `verification`,
+    if set, is the `VerificationResult` from `verify.verify_matrix`, rendered as a
+    `分析驗證` block so the report states whether every 文獻矩陣 row maps to a real
+    retrieved paper.
     """
     header = (
         f"# 研究分析報告：{keyword}\n\n"
@@ -50,12 +54,13 @@ def build_report(
             year_from=year_from,
             model=model,
             stats=stats,
+            verification=verification,
         )
     return body
 
 
 def _search_appendix(
-    *, query, translated_from, paper_count, sort, min_citations, year_from, model, stats
+    *, query, translated_from, paper_count, sort, min_citations, year_from, model, stats, verification
 ) -> str:
     """Render the `## 檢索說明` provenance section."""
     filters = []
@@ -70,12 +75,15 @@ def _search_appendix(
     else:
         query_line = f"- 檢索式：`{query}`"
 
+    db_names = stats.databases if (stats and stats.databases) else ["Semantic Scholar"]
+    db_label = "、".join(db_names)
+
     lines = [
         "## 檢索說明",
         "",
         "本報告的文獻來源與檢索條件如下，供查證與重現：",
         "",
-        "- 資料庫：Semantic Scholar Graph API",
+        f"- 資料庫：{db_label}",
         query_line,
         f"- 檢索日期：{date.today().isoformat()}",
         f"- 排序方式：{_SORT_LABELS.get(sort or '', sort or '未指定')}",
@@ -85,25 +93,43 @@ def _search_appendix(
         lines.append(f"- 分析模型：{model}（temperature=0，結果可重現）")
 
     if stats is not None:
-        lines += [
-            "",
-            "檢索結果統計：",
-            "",
-        ]
+        lines += ["", "檢索結果統計：", ""]
         if stats.total_matches is not None:
-            lines.append(f"- 資料庫估計符合筆數：約 {stats.total_matches}")
+            lines.append(f"- 各資料庫命中估計合計：約 {stats.total_matches}")
         lines += [
             f"- 實際取回筆數：{stats.fetched}",
             f"- 因缺少摘要而排除：{stats.excluded_no_abstract}",
             f"- 因不符篩選條件而排除：{stats.excluded_by_filter}",
-            f"- 最終納入分析：{paper_count}",
         ]
+        if stats.excluded_duplicates:
+            lines.append(f"- 跨資料庫重複而合併：{stats.excluded_duplicates}")
+        lines.append(f"- 最終納入分析：{paper_count}")
+        if stats.sources:
+            contrib = "、".join(f"{name} {count} 篇" for name, count in stats.sources.items())
+            lines.append(f"- 各來源貢獻：{contrib}")
+        if stats.failed_databases:
+            failed = "、".join(stats.failed_databases)
+            lines.append(f"- ⚠️ 查詢失敗、未納入的資料庫：{failed}")
+
+    if verification is not None and verification.checked:
+        lines += ["", "分析驗證（程式自動核對矩陣，非模型自述）：", ""]
+        lines.append(f"- 文獻矩陣列數：{verification.total_rows}")
+        lines.append(f"- 可對應到實際檢索論文：{verification.matched_rows}")
+        if verification.unmatched_titles:
+            lines.append(
+                f"- ⚠️ 無法對應、可能為杜撰的列（{len(verification.unmatched_titles)}）："
+            )
+            lines += [f"  - {title}" for title in verification.unmatched_titles]
+        else:
+            lines.append("- ✅ 矩陣中每一列都對應到實際檢索到的論文，未發現杜撰。")
+        if verification.missing_papers:
+            lines.append(f"- 已檢索但未列入矩陣的論文：{len(verification.missing_papers)}")
 
     lines += [
         "",
-        "納入準則：僅納入 Semantic Scholar 提供摘要（多為英文）的論文；"
+        "納入準則：僅納入上述資料庫提供摘要（多為英文）的論文；"
         "分析內容僅依據各論文之標題與摘要，未取用全文。"
-        "因此實際符合主題但無摘要、或未被本資料庫收錄的論文可能未納入，"
+        "因此實際符合主題但無摘要、或未被這些資料庫收錄的論文可能未納入，"
         "解讀時請留意此覆蓋範圍限制。",
         "",
     ]

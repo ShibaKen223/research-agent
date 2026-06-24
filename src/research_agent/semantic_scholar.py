@@ -5,9 +5,12 @@ from dataclasses import dataclass, field
 
 import requests
 
+from research_agent.text_utils import normalize_doi
+
 SEARCH_URL = "https://api.semanticscholar.org/graph/v1/paper/search"
 BULK_SEARCH_URL = "https://api.semanticscholar.org/graph/v1/paper/search/bulk"
-FIELDS = "title,authors,year,abstract,url,venue,citationCount"
+FIELDS = "paperId,title,authors,year,abstract,url,venue,citationCount,externalIds"
+SOURCE = "Semantic Scholar"
 MAX_RETRIES = 4
 HEADERS = {"User-Agent": "research-agent/0.1.0 (https://github.com/research-agent)"}
 
@@ -30,6 +33,10 @@ class SearchResult:
     fetched: int = 0  # rows actually pulled back from the API
     excluded_no_abstract: int = 0  # of `fetched`, dropped for having no abstract
     excluded_by_filter: int = 0  # of those, dropped by the year/citation re-check
+    excluded_duplicates: int = 0  # dropped because another source already had the paper
+    sources: dict[str, int] = field(default_factory=dict)  # included papers per database
+    databases: list[str] = field(default_factory=list)  # databases queried successfully
+    failed_databases: list[str] = field(default_factory=list)  # queried but errored out
 
     def __bool__(self) -> bool:  # so callers can keep writing `if not result:`
         return bool(self.papers)
@@ -84,12 +91,15 @@ def search_papers(
     if min_citations:
         papers = [p for p in papers if p["citation_count"] >= min_citations]
 
+    final = papers[:limit]
     return SearchResult(
-        papers=papers[:limit],
+        papers=final,
         total_matches=data.get("total"),
         fetched=fetched,
         excluded_no_abstract=fetched - len(with_abstract),
         excluded_by_filter=before_filter - len(papers),
+        sources={SOURCE: len(final)},
+        databases=[SOURCE],
     )
 
 
@@ -115,6 +125,7 @@ def _get(url: str, params: dict) -> dict:
 
 
 def _normalize(paper: dict) -> dict:
+    external = paper.get("externalIds") or {}
     return {
         "title": paper.get("title") or "Untitled",
         "authors": [a.get("name", "") for a in paper.get("authors") or []],
@@ -123,4 +134,7 @@ def _normalize(paper: dict) -> dict:
         "url": paper.get("url") or "",
         "venue": paper.get("venue") or "",
         "citation_count": paper.get("citationCount") or 0,
+        "doi": normalize_doi(external.get("DOI")),
+        "paper_id": paper.get("paperId") or "",
+        "source": SOURCE,
     }
