@@ -15,6 +15,11 @@ export type ReportDetail = {
   raw: string;
 };
 
+export type AcademicTerm = {
+  term: string;
+  gloss: string;
+};
+
 export type SortMode = "relevance" | "citations";
 
 export type SearchOptions = {

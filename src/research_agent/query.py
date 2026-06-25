@@ -8,9 +8,14 @@ when the keyword is already plain ASCII (so an English keyword costs nothing).
 Also provides `suggest_keywords()`, used to propose broader/alternative search
 terms when a search comes back sparse — gated behind a result-count threshold
 by callers so it only fires on the searches that actually need it.
+
+And `suggest_academic_terms()`, a proactive opt-in helper for users who don't
+know the field's terminology: given a plain-language topic, it suggests the
+academic English terms scholars actually use (not a literal translation).
 """
 
 import os
+from typing import NamedTuple
 
 import anthropic
 
@@ -76,6 +81,68 @@ queries, one per line, no numbering, no quotation marks, no explanation.
 
 Research topic: {keyword}
 """
+
+
+_ACADEMIC_TERMS_PROMPT = """\
+The user wants to search an academic paper database but only knows an everyday or \
+industry way to describe their topic (possibly in Chinese), not the terms scholars \
+actually use. Suggest {count} precise academic English search terms or short phrases \
+for THIS SPECIFIC topic — keep every qualifier in the user's topic (role, seniority, \
+sector, etc.); do not drift to a broader or merely adjacent field. Prefer the \
+established subfield/competency/framework terminology scholars use over a literal \
+translation of the user's wording. For each, add a short Traditional Chinese (繁體中文, \
+NOT Simplified) gloss (a few words) explaining what angle it covers. Output ONLY the \
+list, one per line, no numbering, no explanation, formatted exactly as:
+<english term> — <繁體中文 gloss>
+
+User's topic (in their own words): {keyword}
+"""
+
+
+class AcademicTerm(NamedTuple):
+    term: str
+    gloss: str
+
+
+def suggest_academic_terms(
+    keyword: str, count: int = 5, model: str = TRANSLATE_MODEL
+) -> list[AcademicTerm]:
+    """Suggest `count` academic English search terms for a colloquial/non-expert `keyword`.
+
+    Unlike `translate_to_english_query`, this is not a literal translation — it asks
+    for the terminology scholars actually use, so it always calls the API (no ASCII
+    skip) but stays opt-in and cheap (Haiku, small token budget). Raises RuntimeError
+    if the API key is missing; lets anthropic API errors propagate to the caller.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY is not set. Put it in a .env file or export it as an env var."
+        )
+
+    client = anthropic.Anthropic(api_key=api_key)
+    message = client.messages.create(
+        model=model,
+        max_tokens=256,  # a handful of short term + gloss lines; cap to keep cost negligible
+        temperature=0,
+        messages=[{"role": "user", "content": _ACADEMIC_TERMS_PROMPT.format(count=count, keyword=keyword)}],
+    )
+    text = "".join(block.text for block in message.content if block.type == "text").strip()
+
+    terms: list[AcademicTerm] = []
+    for line in text.splitlines():
+        line = line.strip().strip("\"'-•").strip()
+        if not line:
+            continue
+        # The model is asked for "term — gloss"; tolerate a plain hyphen too.
+        for sep in (" — ", " – ", " - "):
+            if sep in line:
+                term, _, gloss = line.partition(sep)
+                terms.append(AcademicTerm(term.strip(), gloss.strip()))
+                break
+        else:
+            terms.append(AcademicTerm(line, ""))
+    return terms[:count]
 
 
 def suggest_keywords(keyword: str, count: int = 3, model: str = TRANSLATE_MODEL) -> list[str]:

@@ -12,13 +12,18 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
 from pydantic import BaseModel
 
 from research_agent.analyzer import DEFAULT_MODEL, analyze
-from research_agent.query import SPARSE_RESULT_THRESHOLD, suggest_keywords, translate_to_english_query
+from research_agent.query import (
+    SPARSE_RESULT_THRESHOLD,
+    suggest_academic_terms,
+    suggest_keywords,
+    translate_to_english_query,
+)
 from research_agent.report import build_report, unique_report_path
 from research_agent.report_parser import (
     SECTION_ORDER,
@@ -35,10 +40,28 @@ load_dotenv()
 app = FastAPI(title="research-agent API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    # Matches localhost and any private-LAN IPv4 address on port 3000, so the
+    # frontend also works when opened from another device on the same Wi-Fi.
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):3000",
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def require_token(request: Request, call_next):
+    # Opt-in: if RESEARCH_AGENT_TOKEN isn't set, behave exactly as before
+    # (no auth — fine for localhost-only use). Once the server is exposed to
+    # the LAN (research-agent-view binds 0.0.0.0), a token is generated so
+    # other devices on the same Wi-Fi can't trigger paid Claude API calls.
+    expected = os.environ.get("RESEARCH_AGENT_TOKEN")
+    if expected and request.url.path.startswith("/api/"):
+        # Header for fetch() calls; query param fallback for plain <a href>
+        # downloads, which can't attach custom headers.
+        got = request.headers.get("x-api-token") or request.query_params.get("token")
+        if got != expected:
+            return JSONResponse(status_code=401, content={"detail": "missing or invalid token"})
+    return await call_next(request)
 
 JobStatus = Literal["searching", "analyzing", "writing", "done", "error"]
 JOB_TTL_SECONDS = 1800
@@ -60,6 +83,10 @@ class SearchRequest(BaseModel):
     min_citations: int = 0
     year_from: int | None = None
     translate: bool = False
+
+
+class TermSuggestRequest(BaseModel):
+    keyword: str
 
 
 jobs: dict[str, Job] = {}
@@ -164,6 +191,15 @@ def download_report(filename: str):
         media_type="text/markdown",
         headers={"Content-Disposition": f'attachment; filename="{path.name}"'},
     )
+
+
+@app.post("/api/suggest-terms")
+def suggest_terms(req: TermSuggestRequest):
+    try:
+        terms = suggest_academic_terms(req.keyword)
+    except Exception as e:  # noqa: BLE001 — surface missing key / API errors as a clean 500
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"terms": [{"term": t.term, "gloss": t.gloss} for t in terms]}
 
 
 def _run_search_job(

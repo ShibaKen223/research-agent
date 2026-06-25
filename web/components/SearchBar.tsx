@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { SearchOptions, SortMode } from "@/lib/types";
+import { suggestAcademicTerms } from "@/lib/api";
+import type { AcademicTerm, SearchOptions, SortMode } from "@/lib/types";
 
 type Props = {
   onSearch: (keyword: string, limit: number, options: SearchOptions) => void;
@@ -15,6 +16,24 @@ export function SearchBar({ onSearch, disabled }: Props) {
   const [minCitations, setMinCitations] = useState(0);
   const [yearFrom, setYearFrom] = useState<number | "">("");
   const [translate, setTranslate] = useState(false);
+  const [terms, setTerms] = useState<AcademicTerm[] | null>(null);
+  const [loadingTerms, setLoadingTerms] = useState(false);
+  const [termsError, setTermsError] = useState<string | null>(null);
+
+  const handleSuggestTerms = async () => {
+    if (!keyword.trim()) return;
+    setLoadingTerms(true);
+    setTermsError(null);
+    try {
+      const { terms } = await suggestAcademicTerms(keyword.trim());
+      setTerms(terms);
+    } catch (e) {
+      setTerms(null);
+      setTermsError(e instanceof Error ? e.message : "建議失敗，請稍後再試。");
+    } finally {
+      setLoadingTerms(false);
+    }
+  };
 
   return (
     <form
@@ -143,7 +162,43 @@ export function SearchBar({ onSearch, disabled }: Props) {
             {translate ? "中→英 已開" : "中→英 關"}
           </button>
         </div>
+
+        <button
+          type="button"
+          disabled={disabled || !keyword.trim() || loadingTerms}
+          onClick={handleSuggestTerms}
+          title="不熟悉領域術語時，用 Haiku 建議學術界常用的英文檢索詞"
+          className="label-sm rounded-full border border-border-hover px-4 py-1.5 text-muted transition hover:border-accent hover:text-accent disabled:opacity-30"
+        >
+          {loadingTerms ? "建議中…" : "學術用語建議"}
+        </button>
       </div>
+
+      {termsError && <p className="text-sm text-red-400">{termsError}</p>}
+
+      {!!terms?.length && (
+        <div className="flex flex-col gap-3">
+          <p className="label-sm text-muted-strong">建議學術檢索詞（點選帶入搜尋框）</p>
+          <div className="flex flex-wrap gap-2">
+            {terms.map((t) => (
+              <button
+                key={t.term}
+                type="button"
+                disabled={disabled}
+                title={t.gloss}
+                onClick={() => {
+                  setKeyword(t.term);
+                  setTerms(null);
+                }}
+                className="label-sm rounded-full border border-border-hover px-4 py-1.5 text-foreground transition hover:border-accent hover:text-accent disabled:opacity-30"
+              >
+                {t.term}
+                {t.gloss && <span className="ml-1.5 text-muted">· {t.gloss}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </form>
   );
 }
