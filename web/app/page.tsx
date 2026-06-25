@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getJob, listReports, startSearch } from "@/lib/api";
 import { ReportCard } from "@/components/ReportCard";
+import { RippleCanvas } from "@/components/RippleCanvas";
 import { SearchBar } from "@/components/SearchBar";
 import { SearchStepper } from "@/components/SearchStepper";
 import { WorkflowModal } from "@/components/WorkflowModal";
@@ -15,6 +16,7 @@ export default function Home() {
   const [job, setJob] = useState<Job | null>(null);
   const [showWorkflow, setShowWorkflow] = useState(false);
   const reportsRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollFailuresRef = useRef(0);
   const lastSearchRef = useRef<{ limit: number; options: SearchOptions } | null>(null);
@@ -69,7 +71,9 @@ export default function Home() {
   const ticks = Array.from({ length: 9 }, (_, i) => String(i + 1).padStart(2, "0"));
 
   return (
-    <div className="relative flex-1 overflow-hidden">
+    <div ref={rootRef} className="relative flex-1 overflow-hidden">
+      <RippleCanvas containerRef={rootRef} />
+
       <div className="ra-corner left-[26px] top-[26px] border-l border-t" />
       <div className="ra-corner right-[26px] top-[26px] border-r border-t" />
       <div className="ra-corner bottom-[26px] left-[26px] border-b border-l" />

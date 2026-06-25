@@ -7,7 +7,12 @@ import click
 from dotenv import load_dotenv
 
 from research_agent.analyzer import DEFAULT_MODEL, analyze
-from research_agent.query import SPARSE_RESULT_THRESHOLD, suggest_keywords, translate_to_english_query
+from research_agent.query import (
+    SPARSE_RESULT_THRESHOLD,
+    suggest_academic_terms,
+    suggest_keywords,
+    translate_to_english_query,
+)
 from research_agent.report import build_report, unique_report_path
 from research_agent.sources import SearchError, search
 from research_agent.verify import verify_matrix
@@ -33,6 +38,13 @@ from research_agent.verify import verify_matrix
     help="先用 Haiku 把（中文）關鍵字翻成英文檢索詞再搜尋，提升英文語料庫的命中率；純英文關鍵字會自動略過、不額外花費。",
 )
 @click.option(
+    "--suggest-terms",
+    is_flag=True,
+    default=False,
+    help="不執行搜尋，只用 Haiku 列出 KEYWORD 可能對應的學術英文檢索詞（附中文說明），"
+    "適合不熟悉領域術語時先參考、再挑一個重新執行。",
+)
+@click.option(
     "--output",
     "output_path",
     default=None,
@@ -46,10 +58,26 @@ def main(
     min_citations: int,
     year_from: int | None,
     translate: bool,
+    suggest_terms: bool,
     output_path: str | None,
 ):
     """搜尋 KEYWORD 相關論文，並用 Claude 產出研究分析報告。"""
     load_dotenv()
+
+    if suggest_terms:
+        try:
+            terms = suggest_academic_terms(keyword)
+        except Exception as e:  # noqa: BLE001 — report and exit, nothing else to fall back to
+            click.echo(f"建議學術用語失敗：{e}", err=True)
+            sys.exit(1)
+        if not terms:
+            click.echo("沒有取得建議用語。")
+            return
+        click.echo(f"「{keyword}」可能對應的學術檢索詞：")
+        for t in terms:
+            click.echo(f"  - {t.term}" + (f"    （{t.gloss}）" if t.gloss else ""))
+        click.echo(f'\n可挑一個重新執行，例如：research-agent "{terms[0].term}"')
+        return
 
     query = keyword
     translated_from = None

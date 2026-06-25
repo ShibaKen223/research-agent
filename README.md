@@ -60,16 +60,91 @@ research-agent-view                   # 4. 開網頁看報告（Ctrl+C 關閉）
 
 每次想研究新主題，重複第 3 步即可，報告會一直累積在資料夾裡，網頁檢視器都能看到。
 
-## 前置準備（已設定好，僅供參考）
+## 在新電腦從零開始安裝（換電腦／重灌後）
 
-- `.env` 裡需要 `ANTHROPIC_API_KEY`（已設定）
-- 第一次使用要先安裝：
-  ```powershell
-  pip install -e .              # CLI 核心功能
-  pip install -e ".[view]"      # 網頁檢視器後端（FastAPI）
-  cd web; npm install; cd ..    # 網頁檢視器前端（Next.js），只需做一次
-  ```
-- 網頁檢視器需要先安裝 [Node.js](https://nodejs.org/)（含 npm）。
+> 程式碼全部都在 GitHub 上（`https://github.com/ShibaKen223/research-agent`，私有 repo）。
+> 換電腦時**不用**手動搬資料夾，照下面步驟重新拉下來、重建環境即可。
+> 注意：`.env`（API key）和產出的報告（`*_report.md`）**不會**進 git（刻意排除，避免外洩／雜訊），
+> 所以新電腦上要自己補一個 `.env`；舊報告沒搬過去也沒關係，隨時可以重跑產生。
+
+### 0. 先裝好這三個工具
+
+- [Git](https://git-scm.com/)
+- [Python 3.10 以上](https://www.python.org/)（安裝時勾選「Add Python to PATH」）
+- [Node.js](https://nodejs.org/)（含 npm，網頁檢視器才需要）
+
+### 1. 把專案拉下來
+
+```powershell
+cd D:\                                                   # 想放哪都行
+git clone https://github.com/ShibaKen223/research-agent.git
+cd research-agent
+```
+
+### 2. 建立並啟用虛擬環境
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+### 3. 安裝相依套件
+
+```powershell
+pip install -e ".[view]"      # 一次裝好 CLI 核心 + 網頁檢視器後端
+cd web; npm install; cd ..    # 網頁檢視器前端（Next.js），只需做一次
+```
+
+### 4. 補上 `.env`（放 API key）
+
+在專案根目錄建立一個 `.env` 檔，內容一行：
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+key 去 [Anthropic Console → API Keys](https://console.anthropic.com/settings/keys) 看／重新產生，
+或從舊電腦的 `.env` 複製過來（建議順手存進密碼管理器，這樣下次換電腦直接貼）。
+
+裝完這四步，就能照上面「從開機到看到報告」的口訣正常使用了。
+
+### macOS 版指令對照
+
+上面用的是 Windows / PowerShell。Mac 用內建的「終端機」（Terminal，zsh），整體流程一樣，**只有三處不同**：用 `python3` 不是 `python`、啟用虛擬環境是 `source .venv/bin/activate`、套件用 [Homebrew](https://brew.sh/) 裝。完整一條龍指令：
+
+```bash
+# 0. 裝工具（Mac 通常自帶 git；沒有 Homebrew 先去 brew.sh 裝）
+brew install python node
+
+# 1. 拉專案
+cd ~
+git clone https://github.com/ShibaKen223/research-agent.git
+cd research-agent
+
+# 2. 建立並啟用虛擬環境（← 跟 Windows 不同的一行）
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 3. 安裝相依套件（跟 Windows 一樣）
+pip install -e ".[view]"
+cd web && npm install && cd ..
+
+# 4. 補上 .env（跟 Windows 一樣，內容一行 ANTHROPIC_API_KEY=sk-ant-...）
+```
+
+之後使用的指令（`research-agent "關鍵字"`、`research-agent-view`、`Ctrl+C` 關閉）在 Mac 上完全相同。每開一個新終端機視窗一樣要先 `cd ~/research-agent` 再 `source .venv/bin/activate`。
+
+| 步驟 | Windows (PowerShell) | macOS (Terminal / zsh) |
+| --- | --- | --- |
+| 裝 Python/Node | 各自到官網下載安裝 | `brew install python node` |
+| 啟用虛擬環境 | `.\.venv\Scripts\Activate.ps1` | `source .venv/bin/activate` |
+| Python 指令 | `python` | `python3` |
+| 安裝套件 | `pip install -e ".[view]"`（相同） | `pip install -e ".[view]"`（相同） |
+| 使用 | `research-agent` / `research-agent-view`（相同） | `research-agent` / `research-agent-view`（相同） |
+
+## 前置準備（本機已設定好，僅供參考）
+
+上面「從新電腦安裝」是完整流程；這台電腦其實已經做完了，平常只要用上面的四行口訣即可。
 
 ## 疑難排解
 
