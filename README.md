@@ -60,16 +60,57 @@ research-agent-view                   # 4. 開網頁看報告（Ctrl+C 關閉）
 
 每次想研究新主題，重複第 3 步即可，報告會一直累積在資料夾裡，網頁檢視器都能看到。
 
-## 前置準備（已設定好，僅供參考）
+## 在新電腦從零開始安裝（換電腦／重灌後）
 
-- `.env` 裡需要 `ANTHROPIC_API_KEY`（已設定）
-- 第一次使用要先安裝：
-  ```powershell
-  pip install -e .              # CLI 核心功能
-  pip install -e ".[view]"      # 網頁檢視器後端（FastAPI）
-  cd web; npm install; cd ..    # 網頁檢視器前端（Next.js），只需做一次
-  ```
-- 網頁檢視器需要先安裝 [Node.js](https://nodejs.org/)（含 npm）。
+> 程式碼全部都在 GitHub 上（`https://github.com/ShibaKen223/research-agent`，私有 repo）。
+> 換電腦時**不用**手動搬資料夾，照下面步驟重新拉下來、重建環境即可。
+> 注意：`.env`（API key）和產出的報告（`*_report.md`）**不會**進 git（刻意排除，避免外洩／雜訊），
+> 所以新電腦上要自己補一個 `.env`；舊報告沒搬過去也沒關係，隨時可以重跑產生。
+
+### 0. 先裝好這三個工具
+
+- [Git](https://git-scm.com/)
+- [Python 3.10 以上](https://www.python.org/)（安裝時勾選「Add Python to PATH」）
+- [Node.js](https://nodejs.org/)（含 npm，網頁檢視器才需要）
+
+### 1. 把專案拉下來
+
+```powershell
+cd D:\                                                   # 想放哪都行
+git clone https://github.com/ShibaKen223/research-agent.git
+cd research-agent
+```
+
+### 2. 建立並啟用虛擬環境
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+### 3. 安裝相依套件
+
+```powershell
+pip install -e ".[view]"      # 一次裝好 CLI 核心 + 網頁檢視器後端
+cd web; npm install; cd ..    # 網頁檢視器前端（Next.js），只需做一次
+```
+
+### 4. 補上 `.env`（放 API key）
+
+在專案根目錄建立一個 `.env` 檔，內容一行：
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+key 去 [Anthropic Console → API Keys](https://console.anthropic.com/settings/keys) 看／重新產生，
+或從舊電腦的 `.env` 複製過來（建議順手存進密碼管理器，這樣下次換電腦直接貼）。
+
+裝完這四步，就能照上面「從開機到看到報告」的口訣正常使用了。
+
+## 前置準備（本機已設定好，僅供參考）
+
+上面「從新電腦安裝」是完整流程；這台電腦其實已經做完了，平常只要用上面的四行口訣即可。
 
 ## 疑難排解
 
