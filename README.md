@@ -108,6 +108,40 @@ key 去 [Anthropic Console → API Keys](https://console.anthropic.com/settings/
 
 裝完這四步，就能照上面「從開機到看到報告」的口訣正常使用了。
 
+### macOS 版指令對照
+
+上面用的是 Windows / PowerShell。Mac 用內建的「終端機」（Terminal，zsh），整體流程一樣，**只有三處不同**：用 `python3` 不是 `python`、啟用虛擬環境是 `source .venv/bin/activate`、套件用 [Homebrew](https://brew.sh/) 裝。完整一條龍指令：
+
+```bash
+# 0. 裝工具（Mac 通常自帶 git；沒有 Homebrew 先去 brew.sh 裝）
+brew install python node
+
+# 1. 拉專案
+cd ~
+git clone https://github.com/ShibaKen223/research-agent.git
+cd research-agent
+
+# 2. 建立並啟用虛擬環境（← 跟 Windows 不同的一行）
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 3. 安裝相依套件（跟 Windows 一樣）
+pip install -e ".[view]"
+cd web && npm install && cd ..
+
+# 4. 補上 .env（跟 Windows 一樣，內容一行 ANTHROPIC_API_KEY=sk-ant-...）
+```
+
+之後使用的指令（`research-agent "關鍵字"`、`research-agent-view`、`Ctrl+C` 關閉）在 Mac 上完全相同。每開一個新終端機視窗一樣要先 `cd ~/research-agent` 再 `source .venv/bin/activate`。
+
+| 步驟 | Windows (PowerShell) | macOS (Terminal / zsh) |
+| --- | --- | --- |
+| 裝 Python/Node | 各自到官網下載安裝 | `brew install python node` |
+| 啟用虛擬環境 | `.\.venv\Scripts\Activate.ps1` | `source .venv/bin/activate` |
+| Python 指令 | `python` | `python3` |
+| 安裝套件 | `pip install -e ".[view]"`（相同） | `pip install -e ".[view]"`（相同） |
+| 使用 | `research-agent` / `research-agent-view`（相同） | `research-agent` / `research-agent-view`（相同） |
+
 ## 前置準備（本機已設定好，僅供參考）
 
 上面「從新電腦安裝」是完整流程；這台電腦其實已經做完了，平常只要用上面的四行口訣即可。
