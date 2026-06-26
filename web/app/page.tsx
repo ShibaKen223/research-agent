@@ -13,6 +13,7 @@ import type { Job, ReportSummary, SearchOptions } from "@/lib/types";
 export default function Home() {
   const router = useRouter();
   const [reports, setReports] = useState<ReportSummary[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
   const [showWorkflow, setShowWorkflow] = useState(false);
   const reportsRef = useRef<HTMLDivElement | null>(null);
@@ -22,7 +23,17 @@ export default function Home() {
   const lastSearchRef = useRef<{ limit: number; options: SearchOptions } | null>(null);
 
   useEffect(() => {
-    listReports().then(setReports).catch(() => setReports([]));
+    listReports()
+      .then((r) => {
+        setReports(r);
+        setLoadError(false);
+      })
+      // Distinguish a real fetch failure (backend down / auth blocked) from a
+      // genuinely empty library — otherwise both look like "no reports yet".
+      .catch(() => {
+        setReports([]);
+        setLoadError(true);
+      });
   }, []);
 
   useEffect(() => {
@@ -170,7 +181,14 @@ export default function Home() {
         </div>
 
         <div ref={reportsRef}>
-          {isEmpty ? (
+          {loadError ? (
+            <div className="mt-20 flex flex-col items-start gap-3 pb-24">
+              <p className="label-sm text-accent">Connection error</p>
+              <p className="text-2xl text-muted">
+                無法連線到後端，請確認伺服器仍在執行後重新整理頁面。
+              </p>
+            </div>
+          ) : isEmpty ? (
             <div className="mt-20 flex flex-col items-start gap-3 pb-24">
               <p className="label-sm">No reports yet</p>
               <p className="text-2xl text-muted">輸入關鍵字，開始你的第一份研究分析</p>

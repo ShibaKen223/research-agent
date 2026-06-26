@@ -55,7 +55,12 @@ async def require_token(request: Request, call_next):
     # the LAN (research-agent-view binds 0.0.0.0), a token is generated so
     # other devices on the same Wi-Fi can't trigger paid Claude API calls.
     expected = os.environ.get("RESEARCH_AGENT_TOKEN")
-    if expected and request.url.path.startswith("/api/"):
+    # Skip CORS preflight (OPTIONS): the browser never attaches the token header
+    # to a preflight, so checking it here would 401 the preflight before
+    # CORSMiddleware can answer it. That silently blocks every cross-origin
+    # /api call the dashboard makes (it then shows "no reports yet"). The real
+    # GET/POST that follows is still token-checked below.
+    if expected and request.method != "OPTIONS" and request.url.path.startswith("/api/"):
         # Header for fetch() calls; query param fallback for plain <a href>
         # downloads, which can't attach custom headers.
         got = request.headers.get("x-api-token") or request.query_params.get("token")

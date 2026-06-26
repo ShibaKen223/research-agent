@@ -12,7 +12,8 @@ import time
 import webbrowser
 from pathlib import Path
 
-WEB_DIR = Path(__file__).resolve().parents[2] / "web"
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+WEB_DIR = _PROJECT_ROOT / "web"
 
 
 def _lan_ip() -> str:
@@ -48,11 +49,15 @@ def main():
         "RESEARCH_AGENT_TOKEN": token,
         "NEXT_PUBLIC_API_URL": f"http://{lan_ip}:8000",
         "NEXT_PUBLIC_API_TOKEN": token,
+        # Always anchor reports to the project root so desktop shortcuts or other
+        # launchers that don't cd first still find existing reports.
+        "REPORTS_DIR": str(_PROJECT_ROOT),
     }
 
     backend = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "research_agent.api:app", "--host", "0.0.0.0", "--port", "8000"],
         env=child_env,
+        cwd=_PROJECT_ROOT,
     )
     frontend = subprocess.Popen([npm, "run", "dev"], cwd=WEB_DIR, env=child_env)
 
