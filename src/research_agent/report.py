@@ -1,5 +1,6 @@
 """Assemble the final markdown report file."""
 
+import re
 from datetime import date
 from pathlib import Path
 
@@ -23,6 +24,24 @@ def _source_label(stats) -> str:
         if dbs:
             return "、".join(dbs)
     return "、".join(_DEFAULT_SOURCES)
+
+
+# A references/參考文獻 heading and its body, up to the next heading or EOF.
+_MODEL_REFS_RE = re.compile(
+    r"^[ \t]*#{1,6}[ \t]*(?:參考文獻|references)[ \t]*$.*?(?=^[ \t]*#{1,6}[ \t]|\Z)",
+    re.MULTILINE | re.DOTALL | re.IGNORECASE,
+)
+
+
+def _strip_model_references(markdown: str) -> str:
+    """Drop any references section the model wrote itself.
+
+    The prompt tells the model not to, but a prompt is only a request. References
+    must be program-generated from real metadata (zero hallucination), so any the
+    model emits are removed before the authoritative `## 參考文獻` is appended —
+    otherwise the report would carry two, the model's with transcribed (and
+    sometimes wrong) DOIs."""
+    return _MODEL_REFS_RE.sub("", markdown).rstrip()
 
 
 def build_report(
@@ -64,7 +83,7 @@ def build_report(
         f"- 資料來源：{_source_label(stats)}\n\n"
         "---\n\n"
     )
-    body = header + analysis_markdown.strip() + "\n"
+    body = header + _strip_model_references(analysis_markdown).strip() + "\n"
 
     if papers:
         body += "\n" + citations.reference_list_markdown(papers)

@@ -90,7 +90,11 @@ def filter_by_relevance(
     ck = cache.key("relevance", model, prompt)
     cached_scores = cache.get("relevance", ck)
     if cached_scores is not None:
-        return _split(papers, cached_scores, model)
+        # JSON object keys come back as strings; `_split` indexes by int, so
+        # coerce them back or every lookup would miss and keep every paper.
+        scores = _coerce_int_keys(cached_scores)
+        if scores is not None:
+            return _split(papers, scores, model)
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -145,6 +149,21 @@ def _papers_block(papers: list[dict]) -> str:
             abstract = abstract[:_ABSTRACT_CHARS] + "…"
         lines.append(f"[{i}] {title}\n{abstract}")
     return "\n\n".join(lines)
+
+
+def _coerce_int_keys(scores) -> dict[int, int] | None:
+    """Normalize a cached scores dict (JSON -> string keys) back to int keys.
+    Returns None if nothing usable, so the caller recomputes instead of trusting
+    a corrupt entry."""
+    if not isinstance(scores, dict):
+        return None
+    out: dict[int, int] = {}
+    for k, v in scores.items():
+        try:
+            out[int(k)] = int(v)
+        except (TypeError, ValueError):
+            continue
+    return out or None
 
 
 def _parse_scores(text: str, n: int) -> dict[int, int] | None:

@@ -63,6 +63,28 @@ def test_parse_scores_returns_none_on_garbage():
     assert relevance._parse_scores("not json at all", 2) is None
 
 
+def test_coerce_int_keys_handles_json_string_keys():
+    # Cache round-trip turns {0:3} into {"0":3}; must come back as int keys.
+    assert relevance._coerce_int_keys({"0": 3, "1": 0}) == {0: 3, 1: 0}
+    assert relevance._coerce_int_keys({"bad": "x"}) is None
+    assert relevance._coerce_int_keys("not a dict") is None
+
+
+def test_cached_string_keyed_scores_still_split_correctly():
+    # Regression: a cache hit returns JSON string keys; the gate must still drop
+    # the off-topic paper, not keep everything (the cache-path bug).
+    papers = _papers(2)
+    original_get = relevance.cache.get
+    relevance.cache.get = lambda ns, k: {"0": 3, "1": 0}  # JSON-style string keys
+    try:
+        result = relevance.filter_by_relevance("topic", papers)
+    finally:
+        relevance.cache.get = original_get
+    assert result.checked
+    assert result.kept == [papers[0]]
+    assert result.dropped == [papers[1]]
+
+
 # --- keep/drop split ----------------------------------------------------------
 
 def test_filter_keeps_relevant_drops_offtopic():
