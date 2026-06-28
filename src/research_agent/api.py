@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 from research_agent.analyzer import DEFAULT_MODEL, analyze
 from research_agent.citations import write_exports
+from research_agent.claim_check import check_claims
 from research_agent.query import (
     SPARSE_RESULT_THRESHOLD,
     suggest_academic_terms,
@@ -93,6 +94,9 @@ class SearchRequest(BaseModel):
     # Haiku relevance gate before analysis. Both add only a cheap Haiku call.
     translate: bool = True
     relevance_filter: bool = True
+    # Off by default: the paid post-analysis check that each 主要發現 is abstract-
+    # supported (one extra Haiku call per run).
+    verify_claims: bool = False
 
 
 class TermSuggestRequest(BaseModel):
@@ -244,6 +248,7 @@ def _run_search_job(
     year_from: int | None,
     translate: bool = True,
     relevance_filter: bool = True,
+    verify_claims: bool = False,
 ):
     try:
         # Dual-query non-ASCII keywords (original + English), mirroring the CLI.
@@ -298,6 +303,7 @@ def _run_search_job(
         )
         analysis = analyze(keyword, papers, model=model)
         verification = verify_matrix(analysis, papers)
+        claim_check = check_claims(analysis, papers) if verify_claims else None
 
         _set_job(job_id, "writing", "正在產生報告...")
         report = build_report(
@@ -314,6 +320,7 @@ def _run_search_job(
             verification=verification,
             papers=papers,
             relevance=relevance,
+            claim_check=claim_check,
         )
         out_path = unique_report_path(_reports_folder(), keyword)
         out_path.write_text(report, encoding="utf-8")
@@ -340,6 +347,7 @@ def start_search(req: SearchRequest, background_tasks: BackgroundTasks):
         req.year_from,
         req.translate,
         req.relevance_filter,
+        req.verify_claims,
     )
     return {"job_id": job_id}
 

@@ -34,6 +34,7 @@ research-agent "你的研究關鍵字"
 - `--output report.md` 自訂輸出檔名（預設 `<關鍵字>_report.md`）
 - `--no-translate` 中文關鍵字預設會「原文＋英譯」雙查以提升命中率；加這個只用原文查
 - `--no-relevance-filter` 預設會先用 Haiku 剔除明顯離題的論文；加這個關閉過濾
+- `--verify-claims` 分析後再用 Haiku 逐列核對「主要發現」是否真有摘要支撐，揪出過度詮釋；預設關閉（每次會多花一次 API 呼叫）
 - `--no-cache` 預設會把相同關鍵字＋參數的搜尋與分析快取在 `.research_agent_cache/`（重跑免費又即時）；加這個強制重新查與重新分析
 - `--suggest-terms` 不搜尋，只列出關鍵字可能對應的學術英文檢索詞
 

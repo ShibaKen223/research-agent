@@ -59,6 +59,7 @@ def build_report(
     verification=None,
     papers: list[dict] | None = None,
     relevance=None,
+    claim_check=None,
 ) -> str:
     """Assemble the final report.
 
@@ -74,7 +75,10 @@ def build_report(
     query was auto-translated from. `relevance`, if set, is the `RelevanceResult`
     from `relevance.filter_by_relevance`, disclosing how many off-topic papers were
     dropped. `verification`, if set, is the `VerificationResult` from
-    `verify.verify_matrix`, stating whether every 文獻矩陣 row maps to a real paper.
+    `verify.verify_matrix`, stating whether every 文獻矩陣 row maps to a real paper
+    (and now also whether each row's 作者/年份 match the metadata). `claim_check`, if
+    set, is the opt-in `ClaimCheckResult` from `claim_check.check_claims`, disclosing
+    which rows' 主要發現 the abstract doesn't support.
     """
     header = (
         f"# 研究分析報告：{keyword}\n\n"
@@ -100,13 +104,14 @@ def build_report(
             stats=stats,
             verification=verification,
             relevance=relevance,
+            claim_check=claim_check,
         )
     return body
 
 
 def _search_appendix(
     *, queries, translated_from, paper_count, sort, min_citations, year_from,
-    model, stats, verification, relevance,
+    model, stats, verification, relevance, claim_check,
 ) -> str:
     """Render the `## 檢索說明` provenance section."""
     filters = []
@@ -201,10 +206,48 @@ def _search_appendix(
                 f"- ⚠️ 無法對應、可能為杜撰的列（{len(verification.unmatched_titles)}）："
             )
             lines += [f"  - {title}" for title in verification.unmatched_titles]
-        else:
-            lines.append("- ✅ 矩陣中每一列都對應到實際檢索到的論文，未發現杜撰。")
+        if verification.author_mismatches:
+            lines.append(
+                f"- ⚠️ 作者疑似張冠李戴、與資料庫 metadata 不符"
+                f"（{len(verification.author_mismatches)}）："
+            )
+            lines += [
+                f"  - 「{m.title}」標示作者「{m.claimed}」，實際應為 {m.actual}"
+                for m in verification.author_mismatches
+            ]
+        if verification.year_mismatches:
+            lines.append(
+                f"- ⚠️ 年份與資料庫 metadata 不符（{len(verification.year_mismatches)}）："
+            )
+            lines += [
+                f"  - 「{m.title}」標示 {m.claimed}，實際為 {m.actual}"
+                for m in verification.year_mismatches
+            ]
+        if verification.ok:
+            lines.append(
+                "- ✅ 矩陣每一列都對應到實際檢索的論文，且作者、年份皆與資料庫 metadata 一致，"
+                "未發現杜撰或張冠李戴。"
+            )
         if verification.missing_papers:
             lines.append(f"- 已檢索但未列入矩陣的論文：{len(verification.missing_papers)}")
+
+    if claim_check is not None and claim_check.checked:
+        lines += [
+            "",
+            f"內容支撐檢查（由 {claim_check.model} 逐列核對「主要發現」是否有對應摘要支撐）：",
+            "",
+        ]
+        lines.append(f"- 已檢查列數：{claim_check.total}")
+        lines.append(f"- 摘要可支撐：{claim_check.supported}")
+        if claim_check.unsupported:
+            lines.append(
+                f"- ⚠️ 摘要未明確支撐、可能過度詮釋或失準的列（{len(claim_check.unsupported)}）："
+            )
+            lines += [
+                f"  - 「{it.title}」：{it.finding}" for it in claim_check.unsupported
+            ]
+        else:
+            lines.append("- ✅ 每列主要發現皆可由對應論文摘要支撐。")
 
     lines += [
         "",

@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from research_agent import cache
 from research_agent.analyzer import DEFAULT_MODEL, analyze
 from research_agent.citations import write_exports
+from research_agent.claim_check import check_claims
 from research_agent.query import (
     SPARSE_RESULT_THRESHOLD,
     suggest_academic_terms,
@@ -49,6 +50,13 @@ from research_agent.verify import verify_matrix
     "提升綜述的切題度；剔除情形會記在報告附錄。--no-relevance-filter 可關閉。",
 )
 @click.option(
+    "--verify-claims/--no-verify-claims",
+    default=False,
+    show_default=True,
+    help="（會額外花費）分析後再用 Haiku 逐列核對「主要發現」是否真有對應論文摘要支撐，"
+    "揪出過度詮釋或失準的列。預設關閉，因為每次都多一次 API 呼叫；結果記在報告附錄。",
+)
+@click.option(
     "--no-cache",
     is_flag=True,
     default=False,
@@ -77,6 +85,7 @@ def main(
     year_from: int | None,
     translate: bool,
     relevance_filter: bool,
+    verify_claims: bool,
     no_cache: bool,
     suggest_terms: bool,
     output_path: str | None,
@@ -185,16 +194,38 @@ def main(
         sys.exit(1)
 
     verification = verify_matrix(analysis, papers)
-    if verification.checked and verification.unmatched_titles:
-        click.echo(
-            f"⚠️ 驗證：文獻矩陣有 {len(verification.unmatched_titles)} 列無法對應到實際檢索的論文，"
-            "已在報告「檢索說明」標註，請覆核。",
-            err=True,
-        )
-    elif verification.checked:
-        click.echo(
-            f"✅ 驗證：文獻矩陣 {verification.matched_rows}/{verification.total_rows} 列均對應到實際論文。"
-        )
+    if verification.checked:
+        issues = []
+        if verification.unmatched_titles:
+            issues.append(f"{len(verification.unmatched_titles)} 列無法對應實際論文")
+        if verification.author_mismatches:
+            issues.append(f"{len(verification.author_mismatches)} 列作者疑似張冠李戴")
+        if verification.year_mismatches:
+            issues.append(f"{len(verification.year_mismatches)} 列年份不符")
+        if issues:
+            click.echo(
+                "⚠️ 驗證：文獻矩陣有 " + "、".join(issues) + "，已在報告「檢索說明」標註，請覆核。",
+                err=True,
+            )
+        else:
+            click.echo(
+                f"✅ 驗證：文獻矩陣 {verification.matched_rows}/{verification.total_rows} "
+                "列均對應實際論文，作者、年份與 metadata 一致。"
+            )
+
+    # Opt-in, paid: does each row's 主要發現 actually hold up against its abstract?
+    claim_check = None
+    if verify_claims:
+        click.echo("內容支撐檢查：用 Haiku 逐列核對「主要發現」是否有摘要支撐...")
+        claim_check = check_claims(analysis, papers)
+        if claim_check.checked and claim_check.unsupported:
+            click.echo(
+                f"⚠️ 內容支撐：{len(claim_check.unsupported)}/{claim_check.total} 列「主要發現」"
+                "摘要未明確支撐，已在報告「檢索說明」標註，請覆核。",
+                err=True,
+            )
+        elif claim_check.checked:
+            click.echo(f"✅ 內容支撐：{claim_check.total} 列「主要發現」皆有摘要支撐。")
 
     report = build_report(
         keyword,
@@ -210,6 +241,7 @@ def main(
         verification=verification,
         papers=papers,
         relevance=relevance,
+        claim_check=claim_check,
     )
 
     out_path = Path(output_path) if output_path else unique_report_path(Path.cwd(), keyword)
