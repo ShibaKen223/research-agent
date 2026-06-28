@@ -3,10 +3,26 @@
 from datetime import date
 from pathlib import Path
 
+from research_agent import citations
+
 _SORT_LABELS = {
     "relevance": "關鍵字相關度",
     "citations": "全領域引用數（由高到低）",
 }
+
+# Shown in the header when no `stats` is available to read the real sources from.
+_DEFAULT_SOURCES = ("Semantic Scholar", "OpenAlex")
+
+
+def _source_label(stats) -> str:
+    """The databases that actually contributed, read from `stats` — never a
+    hardcoded single source (which used to wrongly say "Semantic Scholar" even
+    when OpenAlex supplied papers)."""
+    if stats is not None and getattr(stats, "databases", None):
+        dbs = list(dict.fromkeys(stats.databases))
+        if dbs:
+            return "、".join(dbs)
+    return "、".join(_DEFAULT_SOURCES)
 
 
 def build_report(
@@ -14,7 +30,7 @@ def build_report(
     paper_count: int,
     analysis_markdown: str,
     *,
-    query: str | None = None,
+    queries: list[str] | None = None,
     translated_from: str | None = None,
     sort: str | None = None,
     min_citations: int = 0,
@@ -22,31 +38,40 @@ def build_report(
     model: str | None = None,
     stats=None,
     verification=None,
+    papers: list[dict] | None = None,
+    relevance=None,
 ) -> str:
     """Assemble the final report.
 
-    When `query` is given, a `## 檢索說明` appendix is appended documenting how
-    the report was produced (databases, query, filters, model) and how many papers
-    were found vs. excluded — a reproducible, auditable search record. `stats` is
-    the `SearchResult` from the search (used for the exclusion/dedup/source counts).
-    `translated_from`, if set, is the original keyword the `query` was auto-translated
-    from, so the appendix can disclose that translation happened. `verification`,
-    if set, is the `VerificationResult` from `verify.verify_matrix`, rendered as a
-    `分析驗證` block so the report states whether every 文獻矩陣 row maps to a real
-    retrieved paper.
+    `papers`, if given, are the papers actually analysed; a `## 參考文獻` section
+    with their full citations + DOI/links + a sibling `.bib`/`.ris` export is built
+    straight from this metadata so the report can be cited without re-searching.
+
+    When `queries` is given, a `## 檢索說明` appendix documents how the report was
+    produced (databases, query/queries, filters, model) and how many papers were
+    found vs. excluded — a reproducible, auditable search record. `stats` is the
+    `SearchResult` (exclusion/dedup/source counts and the real source list, now
+    also used for the header). `translated_from`, if set, is the original keyword a
+    query was auto-translated from. `relevance`, if set, is the `RelevanceResult`
+    from `relevance.filter_by_relevance`, disclosing how many off-topic papers were
+    dropped. `verification`, if set, is the `VerificationResult` from
+    `verify.verify_matrix`, stating whether every 文獻矩陣 row maps to a real paper.
     """
     header = (
         f"# 研究分析報告：{keyword}\n\n"
         f"- 產生日期：{date.today().isoformat()}\n"
         f"- 分析論文數量：{paper_count}\n"
-        f"- 資料來源：Semantic Scholar\n\n"
+        f"- 資料來源：{_source_label(stats)}\n\n"
         "---\n\n"
     )
     body = header + analysis_markdown.strip() + "\n"
 
-    if query is not None:
+    if papers:
+        body += "\n" + citations.reference_list_markdown(papers)
+
+    if queries:
         body += "\n" + _search_appendix(
-            query=query,
+            queries=queries,
             translated_from=translated_from,
             paper_count=paper_count,
             sort=sort,
@@ -55,12 +80,14 @@ def build_report(
             model=model,
             stats=stats,
             verification=verification,
+            relevance=relevance,
         )
     return body
 
 
 def _search_appendix(
-    *, query, translated_from, paper_count, sort, min_citations, year_from, model, stats, verification
+    *, queries, translated_from, paper_count, sort, min_citations, year_from,
+    model, stats, verification, relevance,
 ) -> str:
     """Render the `## 檢索說明` provenance section."""
     filters = []
@@ -70,13 +97,17 @@ def _search_appendix(
         filters.append(f"引用數 ≥ {min_citations}")
     filter_label = "、".join(filters) if filters else "無"
 
-    if translated_from:
-        query_line = f"- 檢索式：`{query}`（由關鍵字「{translated_from}」自動翻譯為英文）"
+    if len(queries) > 1:
+        extra = "、".join(f"`{q}`" for q in queries[1:])
+        query_line = (
+            f"- 檢索式：`{queries[0]}`（原文）＋ {extra}（自動英譯）—— 原文與英文雙查後合併"
+        )
+    elif translated_from:
+        query_line = f"- 檢索式：`{queries[0]}`（由關鍵字「{translated_from}」自動翻譯為英文）"
     else:
-        query_line = f"- 檢索式：`{query}`"
+        query_line = f"- 檢索式：`{queries[0]}`"
 
-    db_names = stats.databases if (stats and stats.databases) else ["Semantic Scholar"]
-    db_label = "、".join(db_names)
+    db_label = _source_label(stats)
 
     lines = [
         "## 檢索說明",
@@ -103,13 +134,44 @@ def _search_appendix(
         ]
         if stats.excluded_duplicates:
             lines.append(f"- 跨資料庫重複而合併：{stats.excluded_duplicates}")
-        lines.append(f"- 最終納入分析：{paper_count}")
+        # When the relevance gate dropped papers, the final analysed count lives
+        # in the relevance block below; here we report the pre-filter total so it
+        # reconciles with the per-source contributions.
+        search_included = sum(stats.sources.values()) if stats.sources else paper_count
+        if relevance is not None and relevance.checked and relevance.dropped:
+            lines.append(f"- 通過搜尋與跨來源去重：{search_included}")
+        else:
+            lines.append(f"- 最終納入分析：{paper_count}")
         if stats.sources:
             contrib = "、".join(f"{name} {count} 篇" for name, count in stats.sources.items())
             lines.append(f"- 各來源貢獻：{contrib}")
         if stats.failed_databases:
             failed = "、".join(stats.failed_databases)
             lines.append(f"- ⚠️ 查詢失敗、未納入的資料庫：{failed}")
+
+    if relevance is not None:
+        if relevance.checked:
+            lines += [
+                "",
+                f"相關度過濾（送交分析前由 {relevance.model} 為每篇評分、剔除離題論文）：",
+                "",
+            ]
+            lines.append(f"- 判定相關、納入分析：{len(relevance.kept)}")
+            if relevance.dropped:
+                lines.append(f"- 判定離題而剔除：{len(relevance.dropped)}")
+                lines += [f"  - {t}" for t in relevance.dropped_titles]
+            if relevance.inconclusive:
+                lines.append(
+                    "- ⚠️ 全部論文相關度偏低，已保留全部、未剔除；樣本可能離題，請謹慎解讀。"
+                )
+            elif not relevance.dropped:
+                lines.append("- 所有論文皆判定與主題相關，未剔除。")
+        else:
+            lines += [
+                "",
+                "相關度過濾：本次未能執行（缺金鑰或暫時失敗），已保留全部論文。",
+                "",
+            ]
 
     if verification is not None and verification.checked:
         lines += ["", "分析驗證（程式自動核對矩陣，非模型自述）：", ""]

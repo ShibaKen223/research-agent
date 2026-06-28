@@ -5,6 +5,8 @@ import os
 
 import anthropic
 
+from research_agent import cache
+
 DEFAULT_MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 8192
 
@@ -20,7 +22,9 @@ PROMPT_TEMPLATE = """\
 報告必須包含以下四個章節，標題請完全使用這些文字：
 
 ## 文獻矩陣
-用表格列出每篇論文的：標題、作者（第一作者即可）、年份、引用數、研究方法/主題、主要發現。
+用表格列出每篇論文的：標題、作者（第一作者即可）、年份、期刊/會議、引用數、研究方法/主題、主要發現。
+「期刊/會議」直接照抄清單中該論文的 venue 欄；若清單未提供（venue 為空）則填「未提供」。
+（DOI 與連結不必放進表格，報告會另附「參考文獻」章節由程式精確列出，避免抄錯。）
 
 ## 研究趨勢
 分析這些論文反映出的研究趨勢與演進方向（3-6 點）。每一點都必須用 `### ` 三級標題開頭（例如 `### 1. 標題文字`），標題單獨一行、不要加粗星號，內文另起一段。
@@ -38,6 +42,17 @@ PROMPT_TEMPLATE = """\
 
 
 def analyze(keyword: str, papers: list[dict], model: str = DEFAULT_MODEL) -> str:
+    papers_json = _papers_to_json(papers)
+    prompt = PROMPT_TEMPLATE.format(keyword=keyword, papers_json=papers_json)
+
+    # temperature=0 makes this deterministic, so an identical prompt always yields
+    # an identical report: a cache hit is correct and lets a re-run skip the (paid,
+    # Sonnet-level) call entirely — no API key even required to re-read it.
+    ck = cache.key("analysis", model, prompt)
+    hit = cache.get("analysis", ck)
+    if hit is not None:
+        return hit
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise RuntimeError(
@@ -45,17 +60,15 @@ def analyze(keyword: str, papers: list[dict], model: str = DEFAULT_MODEL) -> str
         )
 
     client = anthropic.Anthropic(api_key=api_key)
-
-    papers_json = _papers_to_json(papers)
-    prompt = PROMPT_TEMPLATE.format(keyword=keyword, papers_json=papers_json)
-
     message = client.messages.create(
         model=model,
         max_tokens=MAX_TOKENS,
         temperature=0,  # deterministic: same papers -> same report, so results are reproducible
         messages=[{"role": "user", "content": prompt}],
     )
-    return "".join(block.text for block in message.content if block.type == "text")
+    text = "".join(block.text for block in message.content if block.type == "text")
+    cache.set("analysis", ck, text)
+    return text
 
 
 # Only the fields the prompt/矩陣 actually use. Internal fields added for

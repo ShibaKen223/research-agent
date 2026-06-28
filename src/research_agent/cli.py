@@ -6,13 +6,16 @@ from pathlib import Path
 import click
 from dotenv import load_dotenv
 
+from research_agent import cache
 from research_agent.analyzer import DEFAULT_MODEL, analyze
+from research_agent.citations import write_exports
 from research_agent.query import (
     SPARSE_RESULT_THRESHOLD,
     suggest_academic_terms,
     suggest_keywords,
     translate_to_english_query,
 )
+from research_agent.relevance import filter_by_relevance
 from research_agent.report import build_report, unique_report_path
 from research_agent.sources import SearchError, search
 from research_agent.verify import verify_matrix
@@ -32,10 +35,25 @@ from research_agent.verify import verify_matrix
 @click.option("--min-citations", default=0, show_default=True, help="過濾掉引用數低於此值的論文。")
 @click.option("--year-from", default=None, type=int, help="只保留此年份（含）之後發表的論文。")
 @click.option(
-    "--translate",
+    "--translate/--no-translate",
+    default=True,
+    show_default=True,
+    help="中文（非 ASCII）關鍵字預設會同時用原文與 Haiku 英譯詞「雙查」再合併，"
+    "大幅提升英文語料庫的命中率；純英文關鍵字不受影響、不額外花費。--no-translate 只用原文查。",
+)
+@click.option(
+    "--relevance-filter/--no-relevance-filter",
+    default=True,
+    show_default=True,
+    help="送交分析前，先用 Haiku 為每篇論文打主題相關分、剔除明顯離題的論文，"
+    "提升綜述的切題度；剔除情形會記在報告附錄。--no-relevance-filter 可關閉。",
+)
+@click.option(
+    "--no-cache",
     is_flag=True,
     default=False,
-    help="先用 Haiku 把（中文）關鍵字翻成英文檢索詞再搜尋，提升英文語料庫的命中率；純英文關鍵字會自動略過、不額外花費。",
+    help="不使用快取。預設會把相同關鍵字＋參數的搜尋與分析結果快取在 "
+    ".research_agent_cache/，讓重跑免費且即時。",
 )
 @click.option(
     "--suggest-terms",
@@ -58,11 +76,15 @@ def main(
     min_citations: int,
     year_from: int | None,
     translate: bool,
+    relevance_filter: bool,
+    no_cache: bool,
     suggest_terms: bool,
     output_path: str | None,
 ):
     """搜尋 KEYWORD 相關論文，並用 Claude 產出研究分析報告。"""
     load_dotenv()
+    if no_cache:
+        cache.disable()
 
     if suggest_terms:
         try:
@@ -79,22 +101,28 @@ def main(
         click.echo(f'\n可挑一個重新執行，例如：research-agent "{terms[0].term}"')
         return
 
-    query = keyword
+    # Default-on for non-ASCII keywords: search the original *and* its English
+    # translation ("dual-query") and merge, so a Chinese keyword no longer yields
+    # the few-and-biased results an English-dominated corpus returns for it. A
+    # plain-English keyword translates to itself, so this stays a single query.
+    queries = [keyword]
     translated_from = None
     if translate:
         try:
-            query = translate_to_english_query(keyword)
-        except Exception as e:  # noqa: BLE001 — any failure should just fall back, not abort
+            translated = translate_to_english_query(keyword)
+        except Exception as e:  # noqa: BLE001 — any failure just falls back to the original
             click.echo(f"翻譯失敗，改用原關鍵字搜尋：{e}", err=True)
-            query = keyword
-        if query != keyword:
+            translated = keyword
+        if translated and translated != keyword:
+            queries = [keyword, translated]
             translated_from = keyword
-            click.echo(f"已將「{keyword}」翻譯為英文檢索詞：{query}")
+            click.echo(f"中文關鍵字：將同時用原文與英譯「雙查」→「{keyword}」＋「{translated}」")
 
-    click.echo(f"[1/3] 在 Semantic Scholar、OpenAlex 搜尋「{query}」...")
+    shown = " ＋ ".join(f"「{q}」" for q in queries)
+    click.echo(f"[1/3] 在 Semantic Scholar、OpenAlex 搜尋 {shown} ...")
     try:
         result = search(
-            query, limit=limit, sort=sort, min_citations=min_citations, year_from=year_from
+            queries, limit=limit, sort=sort, min_citations=min_citations, year_from=year_from
         )
     except SearchError as e:
         click.echo(f"錯誤：{e}", err=True)
@@ -133,7 +161,23 @@ def main(
         for s in suggestions:
             click.echo(f"  - {s}")
 
-    click.echo(f"[2/3] 使用 Claude ({model}) 分析論文...")
+    # Relevance gate: drop keyword-coincidence papers before the (paid) analysis,
+    # so the review isn't written over a near-random off-topic sample.
+    relevance = None
+    if relevance_filter:
+        relevance = filter_by_relevance(keyword, papers)
+        if relevance.checked and relevance.dropped:
+            click.echo(
+                f"相關度過濾：剔除 {len(relevance.dropped)} 篇離題論文，保留 {len(relevance.kept)} 篇。"
+            )
+            for t in relevance.dropped_titles:
+                click.echo(f"  - {t}")
+        if relevance.checked:
+            papers = relevance.kept
+        if relevance.inconclusive:
+            click.echo("⚠️ 所有論文相關度偏低，已保留全部、請謹慎解讀。", err=True)
+
+    click.echo(f"[2/3] 使用 Claude ({model}) 分析 {len(papers)} 篇論文...")
     try:
         analysis = analyze(keyword, papers, model=model)
     except RuntimeError as e:
@@ -156,7 +200,7 @@ def main(
         keyword,
         len(papers),
         analysis,
-        query=query,
+        queries=queries,
         translated_from=translated_from,
         sort=sort,
         min_citations=min_citations,
@@ -164,11 +208,17 @@ def main(
         model=model,
         stats=result,
         verification=verification,
+        papers=papers,
+        relevance=relevance,
     )
 
     out_path = Path(output_path) if output_path else unique_report_path(Path.cwd(), keyword)
     click.echo(f"[3/3] 寫入報告到 {out_path}")
     out_path.write_text(report, encoding="utf-8")
+
+    exports = write_exports(out_path, papers)
+    if exports:
+        click.echo(f"已輸出參考文獻匯出檔：{'、'.join(p.name for p in exports)}")
 
     click.echo("完成！")
 

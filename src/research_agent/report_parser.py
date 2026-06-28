@@ -23,6 +23,7 @@ def parse_report(text: str) -> tuple[dict, dict]:
         ("關鍵字", r"# 研究分析報告：(.+)"),
         ("產生日期", r"產生日期：(.+)"),
         ("分析論文數量", r"分析論文數量：(.+)"),
+        ("資料來源", r"資料來源：(.+)"),
     ]:
         m = re.search(pattern, text)
         if m:

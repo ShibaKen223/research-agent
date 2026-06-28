@@ -14,7 +14,10 @@ sources did respond instead of failing outright; the failed database is recorded
 in `SearchResult.failed_databases` and disclosed in the report.
 """
 
-from research_agent import openalex
+from collections.abc import Sequence
+from dataclasses import asdict
+
+from research_agent import cache, openalex
 from research_agent.semantic_scholar import SOURCE as S2_SOURCE
 from research_agent.semantic_scholar import SearchResult
 from research_agent.semantic_scholar import search_papers as s2_search
@@ -34,37 +37,59 @@ DEFAULT_DATABASES = ("semantic_scholar", "openalex")
 
 
 def search(
-    query: str,
+    query: str | Sequence[str],
     limit: int = 20,
     sort: str = "relevance",
     min_citations: int = 0,
     year_from: int | None = None,
     databases: tuple[str, ...] = DEFAULT_DATABASES,
 ) -> SearchResult:
-    """Search every database in `databases`, merge, de-duplicate, and return one
-    combined `SearchResult`. Each source is queried for `limit` so the merged
-    pool is at least as deep as a single-source search before truncation."""
+    """Search every database in `databases` for every query string in `query`,
+    then merge, de-duplicate, and return one combined `SearchResult`.
+
+    `query` may be a single string or several — passing both a Chinese keyword
+    *and* its English translation ("dual-querying") widens coverage for the
+    English-dominated corpora. Each (query, source) pair is fetched for `limit`,
+    so the merged pool is at least as deep as a single-source search before
+    truncation. Results are cached on (queries, params), so an identical re-run
+    is instant and doesn't re-hit the rate-limited APIs."""
+    queries = [query] if isinstance(query, str) else [q for q in query if q and q.strip()]
+    if not queries:
+        raise SearchError("沒有可用的檢索式。")
+
+    ck = cache.key("search", queries, limit, sort, min_citations, year_from, list(databases))
+    hit = cache.get("search", ck)
+    if hit is not None:
+        return SearchResult(**hit)
+
     results: list[SearchResult] = []
+    succeeded: list[str] = []
     failed: list[str] = []
-    for name in databases:
-        runner, label = _SOURCES[name]
-        try:
-            results.append(
-                runner(
-                    query,
-                    limit=limit,
-                    sort=sort,
-                    min_citations=min_citations,
-                    year_from=year_from,
+    for q in queries:
+        for name in databases:
+            runner, label = _SOURCES[name]
+            try:
+                results.append(
+                    runner(
+                        q,
+                        limit=limit,
+                        sort=sort,
+                        min_citations=min_citations,
+                        year_from=year_from,
+                    )
                 )
-            )
-        except Exception:  # noqa: BLE001 — one dead source must not sink the search
-            failed.append(label)
+                succeeded.append(label)
+            except Exception:  # noqa: BLE001 — one dead source must not sink the search
+                failed.append(label)
 
     if not results:
         raise SearchError("所有文獻資料庫都查詢失敗，請稍後再試。")
 
-    return _merge(results, sort=sort, limit=limit, failed=failed)
+    # A source only counts as failed if it never succeeded for *any* query.
+    failed = [f for f in dict.fromkeys(failed) if f not in succeeded]
+    merged = _merge(results, sort=sort, limit=limit, failed=failed)
+    cache.set("search", ck, asdict(merged))
+    return merged
 
 
 def _merge(
@@ -82,6 +107,8 @@ def _merge(
         excluded_no_abstract += r.excluded_no_abstract
         excluded_by_filter += r.excluded_by_filter
         databases += r.databases
+    # The same database appears once per query when dual-querying; list it once.
+    databases = list(dict.fromkeys(databases))
 
     lists = [list(r.papers) for r in results]
     if sort == "citations":

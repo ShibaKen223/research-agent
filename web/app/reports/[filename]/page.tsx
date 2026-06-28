@@ -77,7 +77,7 @@ export default function ReportPage({
               <span>·</span>
               <span>{report.meta.分析論文數量} 篇論文</span>
               <span>·</span>
-              <span>來源：Semantic Scholar</span>
+              <span>來源：{report.meta.資料來源 ?? "Semantic Scholar、OpenAlex"}</span>
             </div>
           </div>
           <div className="flex gap-1">

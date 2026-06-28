@@ -15,7 +15,9 @@ export function SearchBar({ onSearch, disabled }: Props) {
   const [sort, setSort] = useState<SortMode>("relevance");
   const [minCitations, setMinCitations] = useState(0);
   const [yearFrom, setYearFrom] = useState<number | "">("");
-  const [translate, setTranslate] = useState(false);
+  // Default-on, matching the CLI/API: non-ASCII keywords are dual-queried
+  // (original + English translation) for far better coverage.
+  const [translate, setTranslate] = useState(true);
   const [terms, setTerms] = useState<AcademicTerm[] | null>(null);
   const [loadingTerms, setLoadingTerms] = useState(false);
   const [termsError, setTermsError] = useState<string | null>(null);
@@ -144,7 +146,7 @@ export function SearchBar({ onSearch, disabled }: Props) {
         <div className="flex items-center gap-3">
           <span
             className="label-sm"
-            title="先用 Haiku 把中文關鍵字翻成英文檢索詞再搜尋，提升英文語料庫命中率；純英文關鍵字會自動略過、不額外花費。"
+            title="中文關鍵字會同時用原文與 Haiku 英譯詞「雙查」再合併，大幅提升英文語料庫命中率；純英文關鍵字會自動略過、不額外花費。"
           >
             關鍵字翻譯
           </span>

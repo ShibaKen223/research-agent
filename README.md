@@ -1,6 +1,6 @@
 # research-agent 使用說明
 
-CLI 工具：輸入研究關鍵字 → 用 Semantic Scholar API 搜尋相關論文 → 用 Claude API 分析 → 產出 markdown 研究報告，並可用網頁檢視器瀏覽。
+CLI 工具：輸入研究關鍵字 → 同時用 Semantic Scholar＋OpenAlex 搜尋相關論文（多來源、去重）→ 用 Claude 過濾離題論文＋分析 → 產出附參考文獻的 markdown 研究報告，並可用網頁檢視器瀏覽。
 
 ## 從開機到看到報告
 
@@ -32,8 +32,12 @@ research-agent "你的研究關鍵字"
 - `--limit 20` 搜尋論文數量上限（預設 20）
 - `--model claude-sonnet-4-6` 指定 Claude 模型
 - `--output report.md` 自訂輸出檔名（預設 `<關鍵字>_report.md`）
+- `--no-translate` 中文關鍵字預設會「原文＋英譯」雙查以提升命中率；加這個只用原文查
+- `--no-relevance-filter` 預設會先用 Haiku 剔除明顯離題的論文；加這個關閉過濾
+- `--no-cache` 預設會把相同關鍵字＋參數的搜尋與分析快取在 `.research_agent_cache/`（重跑免費又即時）；加這個強制重新查與重新分析
+- `--suggest-terms` 不搜尋，只列出關鍵字可能對應的學術英文檢索詞
 
-跑的時候會印出三個階段（搜尋論文 → Claude 分析 → 寫入報告），通常 30 秒～2 分鐘內結束。完成後目錄下會多一個 `<關鍵字>_report.md`，內含四個章節：文獻矩陣、研究趨勢、研究缺口、碩論題目建議。
+跑的時候會印出三個階段（搜尋論文 → Claude 分析 → 寫入報告），通常 30 秒～2 分鐘內結束。完成後目錄下會多一個 `<關鍵字>_report.md`，內含四個 Claude 章節（文獻矩陣、研究趨勢、研究缺口、碩論題目建議）＋程式自動產生的「參考文獻」與「檢索說明」，另附 `<關鍵字>_report.bib` / `.ris` 可直接匯入 Zotero／EndNote。
 
 ### 4. 打開網頁檢視器看報告
 
@@ -148,7 +152,7 @@ cd web && npm install && cd ..
 
 ## 疑難排解
 
-- **Semantic Scholar 搜尋出現 rate limit 錯誤**：免費公開 API 共享配額有限，程式已內建自動重試機制，等一下再跑通常會成功。
+- **Semantic Scholar／OpenAlex 搜尋出現 rate limit 錯誤**：兩個免費公開 API 共享配額有限，程式已內建自動重試機制，等一下再跑通常會成功（任一來源失敗也會自動降級用另一來源）。
 - **Claude API 回傳 400 / credit balance too low**：到 [Anthropic Console → Plans & Billing](https://console.anthropic.com/settings/billing) 加值。
 - **找不到關鍵字相關的含摘要論文**：換個更通用或不同的關鍵字再試。
 

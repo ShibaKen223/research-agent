@@ -10,10 +10,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from research_agent import openalex, sources  # noqa: E402
+from research_agent import cache, openalex, sources  # noqa: E402
 from research_agent.semantic_scholar import SearchResult  # noqa: E402
 from research_agent.text_utils import normalize_doi, normalize_title  # noqa: E402
 from research_agent.verify import verify_matrix  # noqa: E402
+
+# These tests are offline and deterministic; the on-disk cache would otherwise
+# serve a stale result when the same query is searched twice (e.g. the source-
+# failure test) and write files into the working directory.
+cache.disable()
 
 
 def _paper(title, doi="", source="Semantic Scholar", citation_count=0):
@@ -106,6 +111,30 @@ def test_merge_citations_sort_orders_desc():
     oa = SearchResult(papers=[_paper("high", doi="10.1/h", citation_count=99)], databases=["OpenAlex"])
     merged = sources._merge([s2, oa], sort="citations", limit=20, failed=[])
     assert [p["title"] for p in merged.papers] == ["high", "low"]
+
+
+def test_dual_query_searches_each_query_and_dedups_databases():
+    calls = []
+
+    def rec(q, **k):
+        calls.append(q)
+        return SearchResult(
+            papers=[_paper(f"P-{q}", doi=f"10.1/{q}")],
+            sources={"Rec": 1},
+            databases=["Rec"],
+        )
+
+    original = dict(sources._SOURCES)
+    sources._SOURCES.clear()
+    sources._SOURCES.update({"rec": (rec, "Rec")})
+    try:
+        res = sources.search(["alpha", "beta"], databases=("rec",))
+        assert calls == ["alpha", "beta"]  # both queries issued
+        assert len(res.papers) == 2  # distinct papers merged
+        assert res.databases == ["Rec"]  # same source listed once, not per-query
+    finally:
+        sources._SOURCES.clear()
+        sources._SOURCES.update(original)
 
 
 def test_search_degrades_when_one_source_fails():
