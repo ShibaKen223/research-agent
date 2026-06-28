@@ -1,6 +1,6 @@
 # research-agent 使用說明
 
-CLI 工具：輸入研究關鍵字 → 同時用 Semantic Scholar＋OpenAlex 搜尋相關論文（多來源、去重）→ 用 Claude 過濾離題論文＋分析 → 產出附參考文獻的 markdown 研究報告，並可用網頁檢視器瀏覽。
+CLI 工具：輸入研究關鍵字 → 同時用 Semantic Scholar＋OpenAlex＋arXiv 搜尋相關論文（多來源、去重）→ 用 Claude 過濾離題論文＋分析 → 產出附參考文獻的 markdown 研究報告，並可用網頁檢視器瀏覽。
 
 ## 從開機到看到報告
 
@@ -153,7 +153,7 @@ cd web && npm install && cd ..
 
 ## 疑難排解
 
-- **Semantic Scholar／OpenAlex 搜尋出現 rate limit 錯誤**：兩個免費公開 API 共享配額有限，程式已內建自動重試機制，等一下再跑通常會成功（任一來源失敗也會自動降級用另一來源）。
+- **Semantic Scholar／OpenAlex／arXiv 搜尋出現 rate limit 錯誤**：這幾個免費公開 API 配額有限，程式已內建自動重試機制，等一下再跑通常會成功（任一來源失敗也會自動降級用其他來源）。
 - **Claude API 回傳 400 / credit balance too low**：到 [Anthropic Console → Plans & Billing](https://console.anthropic.com/settings/billing) 加值。
 - **找不到關鍵字相關的含摘要論文**：換個更通用或不同的關鍵字再試。
 

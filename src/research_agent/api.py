@@ -264,7 +264,7 @@ def _run_search_job(
                 translated_from = keyword
 
         shown = " ＋ ".join(f"「{q}」" for q in queries)
-        _set_job(job_id, "searching", f"在 Semantic Scholar、OpenAlex 搜尋 {shown}...")
+        _set_job(job_id, "searching", f"在 Semantic Scholar、OpenAlex、arXiv 搜尋 {shown}...")
         result = search(
             queries, limit=limit, sort=sort, min_citations=min_citations, year_from=year_from
         )

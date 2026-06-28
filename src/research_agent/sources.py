@@ -1,8 +1,9 @@
 """Run every configured paper source, then merge and de-duplicate the results.
 
-Querying more than one database (Semantic Scholar + OpenAlex) is the single
-biggest lever on a literature review's coverage: each database misses different
-papers, so the union is far closer to "all relevant work" than either alone.
+Querying more than one database (Semantic Scholar + OpenAlex + arXiv) is the
+single biggest lever on a literature review's coverage: each database misses
+different papers, so the union is far closer to "all relevant work" than any one
+alone — arXiv in particular adds very recent preprints the others index slowly.
 
 The same paper often appears in both databases, so results are de-duplicated by
 DOI (falling back to a normalized title) and counted once — the report's
@@ -17,7 +18,7 @@ in `SearchResult.failed_databases` and disclosed in the report.
 from collections.abc import Sequence
 from dataclasses import asdict
 
-from research_agent import cache, openalex
+from research_agent import arxiv, cache, openalex
 from research_agent.semantic_scholar import SOURCE as S2_SOURCE
 from research_agent.semantic_scholar import SearchResult
 from research_agent.semantic_scholar import search_papers as s2_search
@@ -32,8 +33,9 @@ class SearchError(RuntimeError):
 _SOURCES = {
     "semantic_scholar": (s2_search, S2_SOURCE),
     "openalex": (openalex.search_papers, openalex.SOURCE),
+    "arxiv": (arxiv.search_papers, arxiv.SOURCE),
 }
-DEFAULT_DATABASES = ("semantic_scholar", "openalex")
+DEFAULT_DATABASES = ("semantic_scholar", "openalex", "arxiv")
 
 
 def search(

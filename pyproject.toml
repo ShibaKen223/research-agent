@@ -1,7 +1,7 @@
 [project]
 name = "research-agent"
 version = "0.1.0"
-description = "CLI tool that searches Semantic Scholar + OpenAlex and uses Claude to filter, analyze, and produce a verified research literature report."
+description = "CLI tool that searches Semantic Scholar + OpenAlex + arXiv and uses Claude to filter, analyze, and produce a verified research literature report."
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.1",

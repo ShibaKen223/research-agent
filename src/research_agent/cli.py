@@ -128,7 +128,7 @@ def main(
             click.echo(f"中文關鍵字：將同時用原文與英譯「雙查」→「{keyword}」＋「{translated}」")
 
     shown = " ＋ ".join(f"「{q}」" for q in queries)
-    click.echo(f"[1/3] 在 Semantic Scholar、OpenAlex 搜尋 {shown} ...")
+    click.echo(f"[1/3] 在 Semantic Scholar、OpenAlex、arXiv 搜尋 {shown} ...")
     try:
         result = search(
             queries, limit=limit, sort=sort, min_citations=min_citations, year_from=year_from

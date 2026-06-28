@@ -12,7 +12,7 @@ _SORT_LABELS = {
 }
 
 # Shown in the header when no `stats` is available to read the real sources from.
-_DEFAULT_SOURCES = ("Semantic Scholar", "OpenAlex")
+_DEFAULT_SOURCES = ("Semantic Scholar", "OpenAlex", "arXiv")
 
 
 def _source_label(stats) -> str:

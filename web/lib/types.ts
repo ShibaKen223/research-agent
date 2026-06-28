@@ -27,6 +27,12 @@ export type SearchOptions = {
   minCitations: number;
   yearFrom: number | null;
   translate: boolean;
+  // Default-on: drop off-topic (keyword-coincidence) papers with a cheap Haiku
+  // pass before the paid analysis.
+  relevanceFilter: boolean;
+  // Off by default: the extra paid Haiku check that each 主要發現 is
+  // abstract-supported.
+  verifyClaims: boolean;
 };
 
 export type JobStatus = "searching" | "analyzing" | "writing" | "done" | "error";

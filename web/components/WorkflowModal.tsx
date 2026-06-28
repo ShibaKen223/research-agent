@@ -4,7 +4,7 @@ const STEPS = [
   {
     num: "01",
     title: "搜尋",
-    desc: "輸入研究關鍵字，從 Semantic Scholar 與 OpenAlex 取得相關論文與摘要；中文關鍵字會自動以原文＋英譯雙查。",
+    desc: "輸入研究關鍵字，從 Semantic Scholar、OpenAlex 與 arXiv 取得相關論文與摘要；中文關鍵字會自動以原文＋英譯雙查。",
   },
   {
     num: "02",

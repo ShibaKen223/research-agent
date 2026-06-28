@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { deleteReport, downloadUrl, getReport } from "@/lib/api";
+import { deleteReport, downloadExport, downloadUrl, getReport } from "@/lib/api";
 import { splitByH3 } from "@/lib/markdown";
 import { MatrixTable } from "@/components/MatrixTable";
 import { TrendCard } from "@/components/TrendCard";
@@ -58,6 +58,14 @@ export default function ReportPage({
     router.push("/");
   };
 
+  const handleExport = async (fmt: "bib" | "ris") => {
+    try {
+      await downloadExport(report.filename, fmt);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "下載失敗，請稍後再試。");
+    }
+  };
+
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-8 py-12">
       <div>
@@ -77,10 +85,26 @@ export default function ReportPage({
               <span>·</span>
               <span>{report.meta.分析論文數量} 篇論文</span>
               <span>·</span>
-              <span>來源：{report.meta.資料來源 ?? "Semantic Scholar、OpenAlex"}</span>
+              <span>來源：{report.meta.資料來源 ?? "Semantic Scholar、OpenAlex、arXiv"}</span>
             </div>
           </div>
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => handleExport("bib")}
+              aria-label="下載 BibTeX"
+              title="下載 BibTeX 參考文獻（可匯入 Zotero / EndNote）"
+              className="rounded-lg px-2 py-2 text-[11px] font-medium tracking-wide text-muted uppercase transition hover:text-accent"
+            >
+              BibTeX
+            </button>
+            <button
+              onClick={() => handleExport("ris")}
+              aria-label="下載 RIS"
+              title="下載 RIS 參考文獻（可匯入 Zotero / EndNote）"
+              className="rounded-lg px-2 py-2 text-[11px] font-medium tracking-wide text-muted uppercase transition hover:text-accent"
+            >
+              RIS
+            </button>
             <a
               href={downloadUrl(report.filename)}
               aria-label="下載 Markdown"

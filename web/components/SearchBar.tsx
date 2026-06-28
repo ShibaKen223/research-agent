@@ -18,6 +18,10 @@ export function SearchBar({ onSearch, disabled }: Props) {
   // Default-on, matching the CLI/API: non-ASCII keywords are dual-queried
   // (original + English translation) for far better coverage.
   const [translate, setTranslate] = useState(true);
+  // Default-on (cheap Haiku): drop off-topic papers before the paid analysis.
+  const [relevanceFilter, setRelevanceFilter] = useState(true);
+  // Off by default: an extra paid Haiku call per run.
+  const [verifyClaims, setVerifyClaims] = useState(false);
   const [terms, setTerms] = useState<AcademicTerm[] | null>(null);
   const [loadingTerms, setLoadingTerms] = useState(false);
   const [termsError, setTermsError] = useState<string | null>(null);
@@ -48,6 +52,8 @@ export function SearchBar({ onSearch, disabled }: Props) {
             minCitations,
             yearFrom: yearFrom === "" ? null : yearFrom,
             translate,
+            relevanceFilter,
+            verifyClaims,
           });
         }
       }}
@@ -143,27 +149,35 @@ export function SearchBar({ onSearch, disabled }: Props) {
           />
         </div>
 
-        <div className="flex items-center gap-3">
-          <span
-            className="label-sm"
-            title="中文關鍵字會同時用原文與 Haiku 英譯詞「雙查」再合併，大幅提升英文語料庫命中率；純英文關鍵字會自動略過、不額外花費。"
-          >
-            關鍵字翻譯
-          </span>
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => setTranslate((v) => !v)}
-            aria-pressed={translate}
-            className={`label-sm rounded-full border px-4 py-1.5 transition disabled:opacity-30 ${
-              translate
-                ? "border-accent bg-accent text-accent-foreground"
-                : "border-border-hover text-muted hover:border-accent hover:text-accent"
-            }`}
-          >
-            {translate ? "中→英 已開" : "中→英 關"}
-          </button>
-        </div>
+        <Toggle
+          label="關鍵字翻譯"
+          title="中文關鍵字會同時用原文與 Haiku 英譯詞「雙查」再合併，大幅提升英文語料庫命中率；純英文關鍵字會自動略過、不額外花費。"
+          on={translate}
+          onToggle={() => setTranslate((v) => !v)}
+          onText="中→英 已開"
+          offText="中→英 關"
+          disabled={disabled}
+        />
+
+        <Toggle
+          label="相關度過濾"
+          title="送交分析前，先用 Haiku 為每篇論文打主題相關分、剔除明顯離題的論文，提升綜述的切題度；剔除情形會記在報告附錄。"
+          on={relevanceFilter}
+          onToggle={() => setRelevanceFilter((v) => !v)}
+          onText="已開"
+          offText="關"
+          disabled={disabled}
+        />
+
+        <Toggle
+          label="內容支撐檢查（會花費）"
+          title="分析後再用 Haiku 逐列核對「主要發現」是否真有對應論文摘要支撐，揪出過度詮釋或失準的列。每次都會多一次 API 呼叫，故預設關閉。"
+          on={verifyClaims}
+          onToggle={() => setVerifyClaims((v) => !v)}
+          onText="已開"
+          offText="關"
+          disabled={disabled}
+        />
 
         <button
           type="button"
@@ -202,5 +216,44 @@ export function SearchBar({ onSearch, disabled }: Props) {
         </div>
       )}
     </form>
+  );
+}
+
+function Toggle({
+  label,
+  title,
+  on,
+  onToggle,
+  onText,
+  offText,
+  disabled,
+}: {
+  label: string;
+  title?: string;
+  on: boolean;
+  onToggle: () => void;
+  onText: string;
+  offText: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="label-sm" title={title}>
+        {label}
+      </span>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onToggle}
+        aria-pressed={on}
+        className={`label-sm rounded-full border px-4 py-1.5 transition disabled:opacity-30 ${
+          on
+            ? "border-accent bg-accent text-accent-foreground"
+            : "border-border-hover text-muted hover:border-accent hover:text-accent"
+        }`}
+      >
+        {on ? onText : offText}
+      </button>
+    </div>
   );
 }
