@@ -186,9 +186,10 @@ function SectionContent({ title, report }: { title: string; report: ReportDetail
   }
 
   if (title === "研究趨勢") {
-    const items = splitByH3(body);
+    const { preamble, items } = splitByH3(body);
     return (
       <div className="max-w-3xl">
+        <SectionCaveat preamble={preamble} />
         {items.map((item, i) => (
           <TrendCard key={item.heading} item={item} index={i} />
         ))}
@@ -197,30 +198,48 @@ function SectionContent({ title, report }: { title: string; report: ReportDetail
   }
 
   if (title === "研究缺口") {
-    const items = splitByH3(body);
+    const { preamble, items } = splitByH3(body);
     return (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {items.map((item) => (
-          <GapCard key={item.heading} item={item} />
-        ))}
-      </div>
+      <>
+        <SectionCaveat preamble={preamble} />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {items.map((item) => (
+            <GapCard key={item.heading} item={item} />
+          ))}
+        </div>
+      </>
     );
   }
 
   if (title === "碩論題目建議") {
-    const items = splitByH3(body);
+    const { preamble, items } = splitByH3(body);
     return (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {items.map((item) => (
-          <ThesisCard key={item.heading} item={item} filename={report.filename} />
-        ))}
-      </div>
+      <>
+        <SectionCaveat preamble={preamble} />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {items.map((item) => (
+            <ThesisCard key={item.heading} item={item} filename={report.filename} />
+          ))}
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="prose-sm max-w-3xl [&_strong]:text-foreground">
+    <div className="report-prose max-w-3xl">
       <ReactMarkdown>{body}</ReactMarkdown>
+    </div>
+  );
+}
+
+/** Caveat banner for the unverified, model-inference-only sections (研究缺口 /
+ *  碩論題目建議). `preamble` is whatever report.py injected before the first item;
+ *  empty for sections without a caveat (e.g. 研究趨勢), in which case nothing renders. */
+function SectionCaveat({ preamble }: { preamble: string }) {
+  if (!preamble.trim()) return null;
+  return (
+    <div className="report-prose mb-6 max-w-3xl rounded-lg border border-border border-l-2 border-l-accent bg-surface px-4 py-3 text-sm [&_p]:my-0">
+      <ReactMarkdown>{preamble}</ReactMarkdown>
     </div>
   );
 }

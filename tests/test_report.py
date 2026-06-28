@@ -83,6 +83,24 @@ def test_build_report_has_exactly_one_references_section():
     assert "https://doi.org/10.1/real" in out  # the authoritative one remains
 
 
+# --- honesty annotations -----------------------------------------------------
+
+def test_unverified_sections_get_caveat_verified_ones_dont():
+    out = report.build_report("kw", 17, _FOUR_SECTIONS)
+    # Exactly the two inference-only sections are flagged, with the sample size.
+    assert out.count("未經程式驗證") == 2
+    assert "17 篇摘要上的歸納推論" in out
+    # The caveat sits under 研究缺口/碩論題目建議, not under 文獻矩陣/研究趨勢.
+    matrix_to_trend = out[out.index("## 文獻矩陣") : out.index("## 研究趨勢")]
+    assert "未經程式驗證" not in matrix_to_trend
+
+
+def test_search_appendix_discloses_chinese_coverage_gap():
+    stats = SearchResult(papers=[], sources={"OpenAlex": 1}, databases=["OpenAlex"])
+    out = report.build_report("kw", 1, _FOUR_SECTIONS, queries=["kw"], stats=stats)
+    assert "未涵蓋華藝" in out and "臺灣碩博士論文網" in out
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

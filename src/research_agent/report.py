@@ -44,6 +44,38 @@ def _strip_model_references(markdown: str) -> str:
     return _MODEL_REFS_RE.sub("", markdown).rstrip()
 
 
+# These two sections are pure LLM inference over the (small) abstract sample — they
+# are NOT checked by verify.py / claim_check.py, which only validate the 文獻矩陣. A
+# reader can too easily lift them as conclusions, so each is prefixed with an
+# explicit caveat naming the sample size and the (uncovered) Chinese literature.
+_UNVERIFIED_SECTIONS = ("研究缺口", "碩論題目建議")
+
+
+def _unverified_note(paper_count: int) -> str:
+    return (
+        f"**⚠️ 注意：本段為 AI 在 {paper_count} 篇摘要上的歸納推論，未經程式驗證**"
+        "（verify／claim_check 只核對「文獻矩陣」是否對應真實論文，不驗證此處推論）。"
+        "樣本小、且未涵蓋華藝／臺灣碩博士論文網／CNKI 等中文文獻，"
+        "請當作腦力激盪的起點，不可當作「領域事實」或「題目確定新穎」的定論——"
+        "務必回到原始文獻、並另查上述中文資料庫後再下判斷。"
+    )
+
+
+def _annotate_unverified(markdown: str, paper_count: int) -> str:
+    """Prefix each model-inference-only section with an explicit, un-missable caveat
+    so neither the report nor the web view presents it as a verified conclusion."""
+    note = _unverified_note(paper_count)
+    for sec in _UNVERIFIED_SECTIONS:
+        markdown = re.sub(
+            rf"^(##[ \t]*{sec}[ \t]*)$",
+            lambda m, n=note: f"{m.group(1)}\n\n{n}",
+            markdown,
+            count=1,
+            flags=re.MULTILINE,
+        )
+    return markdown
+
+
 def build_report(
     keyword: str,
     paper_count: int,
@@ -60,6 +92,7 @@ def build_report(
     papers: list[dict] | None = None,
     relevance=None,
     claim_check=None,
+    fulltext=None,
 ) -> str:
     """Assemble the final report.
 
@@ -87,7 +120,11 @@ def build_report(
         f"- 資料來源：{_source_label(stats)}\n\n"
         "---\n\n"
     )
-    body = header + _strip_model_references(analysis_markdown).strip() + "\n"
+    body = (
+        header
+        + _annotate_unverified(_strip_model_references(analysis_markdown).strip(), paper_count)
+        + "\n"
+    )
 
     if papers:
         body += "\n" + citations.reference_list_markdown(papers)
@@ -105,13 +142,14 @@ def build_report(
             verification=verification,
             relevance=relevance,
             claim_check=claim_check,
+            fulltext=fulltext,
         )
     return body
 
 
 def _search_appendix(
     *, queries, translated_from, paper_count, sort, min_citations, year_from,
-    model, stats, verification, relevance, claim_check,
+    model, stats, verification, relevance, claim_check, fulltext,
 ) -> str:
     """Render the `## 檢索說明` provenance section."""
     filters = []
@@ -136,7 +174,9 @@ def _search_appendix(
     lines = [
         "## 檢索說明",
         "",
-        "本報告的文獻來源與檢索條件如下，供查證與重現：",
+        "本報告的文獻來源與檢索條件如下，供查證與重現。",
+        "",
+        "### 檢索條件",
         "",
         f"- 資料庫：{db_label}",
         query_line,
@@ -148,7 +188,7 @@ def _search_appendix(
         lines.append(f"- 分析模型：{model}（temperature=0，結果可重現）")
 
     if stats is not None:
-        lines += ["", "檢索結果統計：", ""]
+        lines += ["", "### 檢索結果統計", ""]
         if stats.total_matches is not None:
             lines.append(f"- 各資料庫命中估計合計：約 {stats.total_matches}")
         lines += [
@@ -177,7 +217,9 @@ def _search_appendix(
         if relevance.checked:
             lines += [
                 "",
-                f"相關度過濾（送交分析前由 {relevance.model} 為每篇評分、剔除離題論文）：",
+                "### 相關度過濾",
+                "",
+                f"送交分析前由 {relevance.model} 為每篇評分、剔除離題論文。",
                 "",
             ]
             lines.append(f"- 判定相關、納入分析：{len(relevance.kept)}")
@@ -193,12 +235,20 @@ def _search_appendix(
         else:
             lines += [
                 "",
-                "相關度過濾：本次未能執行（缺金鑰或暫時失敗），已保留全部論文。",
+                "### 相關度過濾",
+                "",
+                "本次未能執行（缺金鑰或暫時失敗），已保留全部論文。",
                 "",
             ]
 
     if verification is not None and verification.checked:
-        lines += ["", "分析驗證（程式自動核對矩陣，非模型自述）：", ""]
+        lines += [
+            "",
+            "### 分析驗證",
+            "",
+            "程式自動核對矩陣，非模型自述。",
+            "",
+        ]
         lines.append(f"- 文獻矩陣列數：{verification.total_rows}")
         lines.append(f"- 可對應到實際檢索論文：{verification.matched_rows}")
         if verification.unmatched_titles:
@@ -234,7 +284,9 @@ def _search_appendix(
     if claim_check is not None and claim_check.checked:
         lines += [
             "",
-            f"內容支撐檢查（由 {claim_check.model} 逐列核對「主要發現」是否有對應摘要支撐）：",
+            "### 內容支撐檢查",
+            "",
+            f"由 {claim_check.model} 逐列核對「主要發現」是否有對應摘要支撐。",
             "",
         ]
         lines.append(f"- 已檢查列數：{claim_check.total}")
@@ -249,12 +301,38 @@ def _search_appendix(
         else:
             lines.append("- ✅ 每列主要發現皆可由對應論文摘要支撐。")
 
+    if fulltext is not None and fulltext.checked:
+        lines += [
+            "",
+            "### 全文限制與方法（OA 子集）",
+            "",
+            f"對開放取用論文抓取全文，由 {fulltext.model} 萃取作者自陳的方法與限制。"
+            "僅涵蓋 OA 論文、且僅供參考——這不是方法品質評估，複雜版面也可能萃取不全。",
+            "",
+        ]
+        lines.append(
+            f"- 嘗試抓取全文：{fulltext.attempted} 篇；成功萃取：{len(fulltext.notes)} 篇"
+        )
+        for note in fulltext.notes:
+            lines.append(f"- 「{note.title}」")
+            if note.methods:
+                lines.append(f"  - 方法：{note.methods}")
+            if note.limitations:
+                lines.append(f"  - 限制：{note.limitations}")
+
     lines += [
         "",
-        "納入準則：僅納入上述資料庫提供摘要（多為英文）的論文；"
+        "### 納入準則",
+        "",
+        "僅納入上述資料庫提供摘要（多為英文）的論文；"
         "分析內容僅依據各論文之標題與摘要，未取用全文。"
         "因此實際符合主題但無摘要、或未被這些資料庫收錄的論文可能未納入，"
         "解讀時請留意此覆蓋範圍限制。",
+        "",
+        "⚠️ **中文文獻覆蓋限制：** 本工具來源為 Semantic Scholar／OpenAlex／arXiv，"
+        "**未涵蓋華藝（airiti）、臺灣碩博士論文網、CNKI、TCI** 等中文／臺灣資料庫。"
+        "因此「研究缺口」與「碩論題目建議」可能漏看既有的中文研究與碩博士論文；"
+        "判斷題目是否新穎時，請務必另行查證這些資料庫。",
         "",
     ]
     return "\n".join(lines)

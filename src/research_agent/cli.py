@@ -10,6 +10,7 @@ from research_agent import cache
 from research_agent.analyzer import DEFAULT_MODEL, analyze
 from research_agent.citations import write_exports
 from research_agent.claim_check import check_claims
+from research_agent.fulltext import extract_fulltext_notes
 from research_agent.query import (
     SPARSE_RESULT_THRESHOLD,
     suggest_academic_terms,
@@ -51,10 +52,19 @@ from research_agent.verify import verify_matrix
 )
 @click.option(
     "--verify-claims/--no-verify-claims",
+    default=True,
+    show_default=True,
+    help="（會額外花費，預設開）分析後再用 Haiku 逐列核對「主要發現」是否真有對應論文摘要支撐，"
+    "揪出過度詮釋或失準的列——這是對引用傷害最大的失敗。每次多一次 Haiku 呼叫（已快取）；"
+    "結果記在報告附錄。--no-verify-claims 可關閉。",
+)
+@click.option(
+    "--fulltext/--no-fulltext",
     default=False,
     show_default=True,
-    help="（會額外花費）分析後再用 Haiku 逐列核對「主要發現」是否真有對應論文摘要支撐，"
-    "揪出過度詮釋或失準的列。預設關閉，因為每次都多一次 API 呼叫；結果記在報告附錄。",
+    help="（會額外花費、需 pypdf）對開放取用論文（arXiv 直連／Unpaywall）抓取全文，"
+    "用 Haiku 萃取作者自陳的「方法與限制」，突破只讀摘要的限制。僅 OA、上限數篇；"
+    "預設關閉。需設 UNPAYWALL_EMAIL 或 OPENALEX_MAILTO 才會走 Unpaywall。",
 )
 @click.option(
     "--no-cache",
@@ -86,6 +96,7 @@ def main(
     translate: bool,
     relevance_filter: bool,
     verify_claims: bool,
+    fulltext: bool,
     no_cache: bool,
     suggest_terms: bool,
     output_path: str | None,
@@ -227,6 +238,20 @@ def main(
         elif claim_check.checked:
             click.echo(f"✅ 內容支撐：{claim_check.total} 列「主要發現」皆有摘要支撐。")
 
+    # Opt-in, paid: break the abstract-only ceiling for the OA subset by pulling
+    # each open-access paper's full text and extracting its stated methods/limits.
+    fulltext_notes = None
+    if fulltext:
+        click.echo("全文萃取：對開放取用論文抓取全文，萃取作者自陳的方法與限制...")
+        fulltext_notes = extract_fulltext_notes(papers)
+        if fulltext_notes.checked:
+            click.echo(
+                f"✅ 全文萃取：從 {len(fulltext_notes.notes)} 篇 OA 論文萃取方法/限制"
+                f"（嘗試 {fulltext_notes.attempted} 篇）。"
+            )
+        else:
+            click.echo("（全文萃取：沒有可用的 OA 全文或未能執行，略過。）")
+
     report = build_report(
         keyword,
         len(papers),
@@ -242,6 +267,7 @@ def main(
         papers=papers,
         relevance=relevance,
         claim_check=claim_check,
+        fulltext=fulltext_notes,
     )
 
     out_path = Path(output_path) if output_path else unique_report_path(Path.cwd(), keyword)

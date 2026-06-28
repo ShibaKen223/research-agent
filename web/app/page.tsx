@@ -235,7 +235,8 @@ export default function Home() {
                 yearFrom: null,
                 translate: true,
                 relevanceFilter: true,
-                verifyClaims: false,
+                verifyClaims: true,
+                fulltext: false,
               },
             };
             handleSearch(keyword, limit, options);

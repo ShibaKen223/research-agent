@@ -12,6 +12,9 @@ dependencies = [
 
 [project.optional-dependencies]
 view = ["fastapi>=0.110", "uvicorn[standard]>=0.27"]
+# Opt-in full-text extraction (--fulltext). Kept optional so the base install
+# stays lean; fulltext.py imports pypdf lazily and fails open when it's absent.
+fulltext = ["pypdf>=4"]
 
 [project.scripts]
 research-agent = "research_agent.cli:main"

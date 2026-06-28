@@ -74,11 +74,12 @@ export function startSearch(
       sort: options?.sort ?? "relevance",
       min_citations: options?.minCitations ?? 0,
       year_from: options?.yearFrom ?? null,
-      // Fallback defaults mirror the backend's (translate + relevance on, paid
-      // claim check off), so an omitted option never silently flips a default.
+      // Fallback defaults mirror the backend's (translate + relevance + claim
+      // check on, OA full-text off), so an omitted option never flips a default.
       translate: options?.translate ?? true,
       relevance_filter: options?.relevanceFilter ?? true,
-      verify_claims: options?.verifyClaims ?? false,
+      verify_claims: options?.verifyClaims ?? true,
+      fulltext: options?.fulltext ?? false,
     }),
   });
 }

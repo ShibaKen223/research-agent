@@ -20,8 +20,11 @@ export function SearchBar({ onSearch, disabled }: Props) {
   const [translate, setTranslate] = useState(true);
   // Default-on (cheap Haiku): drop off-topic papers before the paid analysis.
   const [relevanceFilter, setRelevanceFilter] = useState(true);
-  // Off by default: an extra paid Haiku call per run.
-  const [verifyClaims, setVerifyClaims] = useState(false);
+  // On by default: guards over-claiming, the most citation-damaging failure.
+  // Only a cheap, cached Haiku call, so it's worth paying for on every run.
+  const [verifyClaims, setVerifyClaims] = useState(true);
+  // Off by default: paid + network (downloads OA PDFs, one Haiku call).
+  const [fulltext, setFulltext] = useState(false);
   const [terms, setTerms] = useState<AcademicTerm[] | null>(null);
   const [loadingTerms, setLoadingTerms] = useState(false);
   const [termsError, setTermsError] = useState<string | null>(null);
@@ -54,6 +57,7 @@ export function SearchBar({ onSearch, disabled }: Props) {
             translate,
             relevanceFilter,
             verifyClaims,
+            fulltext,
           });
         }
       }}
@@ -75,7 +79,7 @@ export function SearchBar({ onSearch, disabled }: Props) {
         </button>
       </div>
       <div className="flex items-center gap-4">
-        <span className="label-sm">論文上限</span>
+        <span className="control-label">論文上限</span>
         <div className="flex items-center gap-3.5">
           <button
             type="button"
@@ -99,7 +103,7 @@ export function SearchBar({ onSearch, disabled }: Props) {
 
       <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
         <div className="flex items-center gap-3">
-          <span className="label-sm">排序方式</span>
+          <span className="control-label">排序方式</span>
           <div className="flex gap-2">
             {([
               { key: "relevance", label: "相關度" },
@@ -110,10 +114,10 @@ export function SearchBar({ onSearch, disabled }: Props) {
                 type="button"
                 disabled={disabled}
                 onClick={() => setSort(opt.key)}
-                className={`label-sm rounded-full border px-4 py-1.5 transition disabled:opacity-30 ${
+                className={`rounded-full border px-4 py-2 text-sm font-medium transition disabled:opacity-30 ${
                   sort === opt.key
-                    ? "border-accent bg-accent text-accent-foreground"
-                    : "border-border-hover text-muted hover:border-accent hover:text-accent"
+                    ? "border-accent-strong bg-accent-strong text-accent-foreground"
+                    : "border-border-hover text-muted-strong hover:border-accent hover:text-accent"
                 }`}
               >
                 {opt.label}
@@ -123,7 +127,7 @@ export function SearchBar({ onSearch, disabled }: Props) {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="label-sm">最低引用數</span>
+          <span className="control-label">最低引用數</span>
           <input
             type="number"
             min={0}
@@ -136,7 +140,7 @@ export function SearchBar({ onSearch, disabled }: Props) {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="label-sm">起始年份</span>
+          <span className="control-label">起始年份</span>
           <input
             type="number"
             min={1900}
@@ -171,9 +175,19 @@ export function SearchBar({ onSearch, disabled }: Props) {
 
         <Toggle
           label="內容支撐檢查（會花費）"
-          title="分析後再用 Haiku 逐列核對「主要發現」是否真有對應論文摘要支撐，揪出過度詮釋或失準的列。每次都會多一次 API 呼叫，故預設關閉。"
+          title="分析後再用 Haiku 逐列核對「主要發現」是否真有對應論文摘要支撐，揪出過度詮釋或失準的列。每次多一次 Haiku 呼叫（已快取），守住對引用傷害最大的「過度詮釋」，故預設開啟。"
           on={verifyClaims}
           onToggle={() => setVerifyClaims((v) => !v)}
+          onText="已開"
+          offText="關"
+          disabled={disabled}
+        />
+
+        <Toggle
+          label="OA 全文萃取（會花費）"
+          title="對開放取用論文（arXiv／Unpaywall）抓取全文，用 Haiku 萃取作者自陳的「方法與限制」，突破只讀摘要的限制。僅涵蓋 OA 論文、上限數篇，且需下載 PDF；預設關閉。"
+          on={fulltext}
+          onToggle={() => setFulltext((v) => !v)}
           onText="已開"
           offText="關"
           disabled={disabled}
@@ -184,7 +198,7 @@ export function SearchBar({ onSearch, disabled }: Props) {
           disabled={disabled || !keyword.trim() || loadingTerms}
           onClick={handleSuggestTerms}
           title="不熟悉領域術語時，用 Haiku 建議學術界常用的英文檢索詞"
-          className="label-sm rounded-full border border-border-hover px-4 py-1.5 text-muted transition hover:border-accent hover:text-accent disabled:opacity-30"
+          className="rounded-full border border-border-hover px-4 py-2 text-sm font-medium text-muted-strong transition hover:border-accent hover:text-accent disabled:opacity-30"
         >
           {loadingTerms ? "建議中…" : "學術用語建議"}
         </button>
@@ -194,7 +208,7 @@ export function SearchBar({ onSearch, disabled }: Props) {
 
       {!!terms?.length && (
         <div className="flex flex-col gap-3">
-          <p className="label-sm text-muted-strong">建議學術檢索詞（點選帶入搜尋框）</p>
+          <p className="control-label">建議學術檢索詞（點選帶入搜尋框）</p>
           <div className="flex flex-wrap gap-2">
             {terms.map((t) => (
               <button
@@ -206,10 +220,10 @@ export function SearchBar({ onSearch, disabled }: Props) {
                   setKeyword(t.term);
                   setTerms(null);
                 }}
-                className="label-sm rounded-full border border-border-hover px-4 py-1.5 text-foreground transition hover:border-accent hover:text-accent disabled:opacity-30"
+                className="rounded-full border border-border-hover px-4 py-2 text-sm font-medium text-foreground transition hover:border-accent hover:text-accent disabled:opacity-30"
               >
                 {t.term}
-                {t.gloss && <span className="ml-1.5 text-muted">· {t.gloss}</span>}
+                {t.gloss && <span className="ml-1.5 text-muted-strong">· {t.gloss}</span>}
               </button>
             ))}
           </div>
@@ -238,7 +252,7 @@ function Toggle({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="label-sm" title={title}>
+      <span className="control-label" title={title}>
         {label}
       </span>
       <button
@@ -246,10 +260,10 @@ function Toggle({
         disabled={disabled}
         onClick={onToggle}
         aria-pressed={on}
-        className={`label-sm rounded-full border px-4 py-1.5 transition disabled:opacity-30 ${
+        className={`rounded-full border px-4 py-2 text-sm font-medium transition disabled:opacity-30 ${
           on
-            ? "border-accent bg-accent text-accent-foreground"
-            : "border-border-hover text-muted hover:border-accent hover:text-accent"
+            ? "border-accent-strong bg-accent-strong text-accent-foreground"
+            : "border-border-hover text-muted-strong hover:border-accent hover:text-accent"
         }`}
       >
         {on ? onText : offText}

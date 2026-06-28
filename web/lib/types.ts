@@ -30,9 +30,12 @@ export type SearchOptions = {
   // Default-on: drop off-topic (keyword-coincidence) papers with a cheap Haiku
   // pass before the paid analysis.
   relevanceFilter: boolean;
-  // Off by default: the extra paid Haiku check that each 主要發現 is
-  // abstract-supported.
+  // On by default: the cheap, cached Haiku check that each 主要發現 is
+  // abstract-supported (guards over-claiming).
   verifyClaims: boolean;
+  // Off by default: paid + network. Pull OA full text (arXiv / Unpaywall) and
+  // extract authors' stated methods/limitations (OA subset only).
+  fulltext: boolean;
 };
 
 export type JobStatus = "searching" | "analyzing" | "writing" | "done" | "error";
