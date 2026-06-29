@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { deleteReport, downloadUrl, getReport } from "@/lib/api";
+import { deleteReport, downloadExport, downloadUrl, getReport } from "@/lib/api";
 import { splitByH3 } from "@/lib/markdown";
 import { MatrixTable } from "@/components/MatrixTable";
 import { TrendCard } from "@/components/TrendCard";
@@ -58,6 +58,14 @@ export default function ReportPage({
     router.push("/");
   };
 
+  const handleExport = async (fmt: "bib" | "ris") => {
+    try {
+      await downloadExport(report.filename, fmt);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "下載失敗，請稍後再試。");
+    }
+  };
+
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-8 py-12">
       <div>
@@ -77,10 +85,26 @@ export default function ReportPage({
               <span>·</span>
               <span>{report.meta.分析論文數量} 篇論文</span>
               <span>·</span>
-              <span>來源：Semantic Scholar</span>
+              <span>來源：{report.meta.資料來源 ?? "Semantic Scholar、OpenAlex、arXiv"}</span>
             </div>
           </div>
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => handleExport("bib")}
+              aria-label="下載 BibTeX"
+              title="下載 BibTeX 參考文獻（可匯入 Zotero / EndNote）"
+              className="rounded-lg px-2 py-2 text-[11px] font-medium tracking-wide text-muted uppercase transition hover:text-accent"
+            >
+              BibTeX
+            </button>
+            <button
+              onClick={() => handleExport("ris")}
+              aria-label="下載 RIS"
+              title="下載 RIS 參考文獻（可匯入 Zotero / EndNote）"
+              className="rounded-lg px-2 py-2 text-[11px] font-medium tracking-wide text-muted uppercase transition hover:text-accent"
+            >
+              RIS
+            </button>
             <a
               href={downloadUrl(report.filename)}
               aria-label="下載 Markdown"
@@ -162,9 +186,10 @@ function SectionContent({ title, report }: { title: string; report: ReportDetail
   }
 
   if (title === "研究趨勢") {
-    const items = splitByH3(body);
+    const { preamble, items } = splitByH3(body);
     return (
       <div className="max-w-3xl">
+        <SectionCaveat preamble={preamble} />
         {items.map((item, i) => (
           <TrendCard key={item.heading} item={item} index={i} />
         ))}
@@ -173,30 +198,48 @@ function SectionContent({ title, report }: { title: string; report: ReportDetail
   }
 
   if (title === "研究缺口") {
-    const items = splitByH3(body);
+    const { preamble, items } = splitByH3(body);
     return (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {items.map((item) => (
-          <GapCard key={item.heading} item={item} />
-        ))}
-      </div>
+      <>
+        <SectionCaveat preamble={preamble} />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {items.map((item) => (
+            <GapCard key={item.heading} item={item} />
+          ))}
+        </div>
+      </>
     );
   }
 
   if (title === "碩論題目建議") {
-    const items = splitByH3(body);
+    const { preamble, items } = splitByH3(body);
     return (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {items.map((item) => (
-          <ThesisCard key={item.heading} item={item} filename={report.filename} />
-        ))}
-      </div>
+      <>
+        <SectionCaveat preamble={preamble} />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {items.map((item) => (
+            <ThesisCard key={item.heading} item={item} filename={report.filename} />
+          ))}
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="prose-sm max-w-3xl [&_strong]:text-foreground">
+    <div className="report-prose max-w-3xl">
       <ReactMarkdown>{body}</ReactMarkdown>
+    </div>
+  );
+}
+
+/** Caveat banner for the unverified, model-inference-only sections (研究缺口 /
+ *  碩論題目建議). `preamble` is whatever report.py injected before the first item;
+ *  empty for sections without a caveat (e.g. 研究趨勢), in which case nothing renders. */
+function SectionCaveat({ preamble }: { preamble: string }) {
+  if (!preamble.trim()) return null;
+  return (
+    <div className="report-prose mb-6 max-w-3xl rounded-lg border border-border border-l-2 border-l-accent bg-surface px-4 py-3 text-sm [&_p]:my-0">
+      <ReactMarkdown>{preamble}</ReactMarkdown>
     </div>
   );
 }

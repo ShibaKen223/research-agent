@@ -16,6 +16,7 @@
   --muted: #9a8e7e;
   --muted-strong: #6e6357;
   --accent: #da4b26;
+  --accent-strong: #b8401f;
   --accent-foreground: #fcf7ef;
   --accent-glow: rgba(218, 75, 38, 0.1);
   --teal: #2a7a6f;
@@ -31,6 +32,7 @@
   --color-muted: var(--muted);
   --color-muted-strong: var(--muted-strong);
   --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent-glow: var(--accent-glow);
   --color-teal: var(--teal);
@@ -87,6 +89,105 @@ table tr {
   text-transform: uppercase;
   color: var(--muted);
   font-family: var(--font-mono);
+}
+
+/* Interactive control labels (search options row). Larger and darker than
+   .label-sm — that decorative micro-label style is too small/low-contrast for
+   text you actually need to read while operating the form, esp. in Chinese. */
+.control-label {
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  color: var(--muted-strong);
+  font-family: var(--font-mono);
+}
+
+/* Program-generated report sections (參考文獻 / 檢索說明) render through
+   <ReactMarkdown>. No typography plugin is installed and Tailwind's preflight
+   strips list markers + margins, so without explicit rules every entry
+   collapses into one unreadable block. These restore markers, spacing and a
+   clear heading hierarchy, on-theme. */
+.report-prose {
+  color: var(--muted-strong);
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+.report-prose > :first-child {
+  margin-top: 0;
+}
+.report-prose p {
+  margin: 0.9rem 0;
+}
+.report-prose ol,
+.report-prose ul {
+  margin: 0.8rem 0;
+  padding-left: 1.65rem;
+}
+.report-prose ol {
+  list-style: decimal;
+}
+.report-prose ul {
+  list-style: disc;
+}
+.report-prose li {
+  margin-bottom: 0.5rem;
+  padding-left: 0.3rem;
+  line-height: 1.65;
+}
+.report-prose li:last-child {
+  margin-bottom: 0;
+}
+.report-prose li::marker {
+  color: var(--muted);
+}
+/* Nested lists (e.g. dropped-paper titles under a stat) sit tighter with a
+   lighter marker so the hierarchy reads at a glance. */
+.report-prose li > ul,
+.report-prose li > ol {
+  margin: 0.4rem 0 0.1rem;
+}
+.report-prose li > ul {
+  list-style: circle;
+}
+.report-prose h2,
+.report-prose h3 {
+  color: var(--foreground);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.report-prose h2 {
+  font-size: 1.2rem;
+  margin: 1.8rem 0 0.8rem;
+}
+.report-prose h3 {
+  font-size: 1.02rem;
+  margin: 1.6rem 0 0.7rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+.report-prose h2:first-child,
+.report-prose h3:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.report-prose strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.report-prose a {
+  color: var(--accent);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.report-prose a:hover {
+  text-decoration: underline;
+}
+.report-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--surface-hover);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.3rem;
 }
 
 @keyframes ra-spin {

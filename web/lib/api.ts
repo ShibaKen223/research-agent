@@ -31,6 +31,35 @@ export function downloadUrl(filename: string): string {
   return `${BASE_URL}/api/reports/${encodeURIComponent(filename)}/download${tokenParam}`;
 }
 
+export function exportUrl(filename: string, fmt: "bib" | "ris"): string {
+  const tokenParam = API_TOKEN ? `?token=${encodeURIComponent(API_TOKEN)}` : "";
+  return `${BASE_URL}/api/reports/${encodeURIComponent(filename)}/export/${fmt}${tokenParam}`;
+}
+
+// Fetch the citation export and trigger a browser download. Unlike the Markdown
+// download (a plain <a>, since the report always exists), the .bib/.ris exports
+// are only present for reports produced after that feature shipped — so we fetch
+// first and let the caller surface a clean message on 404 instead of navigating
+// the user to a raw JSON error page.
+export async function downloadExport(filename: string, fmt: "bib" | "ris"): Promise<void> {
+  const headers = new Headers();
+  if (API_TOKEN) headers.set("X-API-Token", API_TOKEN);
+  const res = await fetch(exportUrl(filename, fmt), { headers });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail ?? `${res.status} ${res.statusText}`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename.replace(/\.md$/, `.${fmt}`);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function startSearch(
   keyword: string,
   limit: number,
@@ -45,7 +74,13 @@ export function startSearch(
       sort: options?.sort ?? "relevance",
       min_citations: options?.minCitations ?? 0,
       year_from: options?.yearFrom ?? null,
-      translate: options?.translate ?? false,
+      // Fallback defaults mirror the backend's (translate + relevance + claim
+      // check on, OA full-text off), so an omitted option never flips a default.
+      translate: options?.translate ?? true,
+      relevance_filter: options?.relevanceFilter ?? true,
+      verify_claims: options?.verifyClaims ?? true,
+      fulltext: options?.fulltext ?? false,
+      ndltd: options?.ndltd ?? false,
     }),
   });
 }

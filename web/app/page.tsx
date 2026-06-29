@@ -211,7 +211,7 @@ export default function Home() {
       </main>
 
       <div className="label-sm absolute bottom-11 left-8 z-[3] sm:left-[60px]">
-        SEMANTIC SCHOLAR · OPENALEX
+        SEMANTIC SCHOLAR · OPENALEX · ARXIV
       </div>
       <div className="label-sm absolute bottom-11 right-8 z-[3] text-accent sm:right-[60px]">
         POWERED BY CLAUDE
@@ -229,7 +229,16 @@ export default function Home() {
           onSelectSuggestion={(keyword) => {
             const { limit, options } = lastSearchRef.current ?? {
               limit: 20,
-              options: { sort: "relevance", minCitations: 0, yearFrom: null, translate: false },
+              options: {
+                sort: "relevance",
+                minCitations: 0,
+                yearFrom: null,
+                translate: true,
+                relevanceFilter: true,
+                verifyClaims: true,
+                fulltext: false,
+                ndltd: false,
+              },
             };
             handleSearch(keyword, limit, options);
           }}

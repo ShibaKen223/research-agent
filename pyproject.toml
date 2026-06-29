@@ -1,7 +1,7 @@
 [project]
 name = "research-agent"
 version = "0.1.0"
-description = "CLI tool that searches Semantic Scholar and uses Claude to produce a research literature report."
+description = "CLI tool that searches Semantic Scholar + OpenAlex + arXiv and uses Claude to filter, analyze, and produce a verified research literature report."
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.1",
@@ -12,6 +12,9 @@ dependencies = [
 
 [project.optional-dependencies]
 view = ["fastapi>=0.110", "uvicorn[standard]>=0.27"]
+# Opt-in full-text extraction (--fulltext). Kept optional so the base install
+# stays lean; fulltext.py imports pypdf lazily and fails open when it's absent.
+fulltext = ["pypdf>=4"]
 
 [project.scripts]
 research-agent = "research_agent.cli:main"

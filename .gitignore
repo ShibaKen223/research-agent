@@ -7,6 +7,13 @@ build/
 dist/
 /reports/
 *_report.md
+*_report.bib
+*_report.ris
+reports/*.bib
+reports/*.ris
+
+# Search/analysis cache (re-run savings; safe to delete)
+.research_agent_cache/
 
 # Node / web frontend
 node_modules/

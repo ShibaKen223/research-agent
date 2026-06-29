@@ -18,12 +18,17 @@ from fastapi.responses import Response, JSONResponse
 from pydantic import BaseModel
 
 from research_agent.analyzer import DEFAULT_MODEL, analyze
+from research_agent.citations import write_exports
+from research_agent.claim_check import check_claims
+from research_agent.fulltext import extract_fulltext_notes
+from research_agent.ndltd import search_theses
 from research_agent.query import (
     SPARSE_RESULT_THRESHOLD,
     suggest_academic_terms,
     suggest_keywords,
     translate_to_english_query,
 )
+from research_agent.relevance import filter_by_relevance
 from research_agent.report import build_report, unique_report_path
 from research_agent.report_parser import (
     SECTION_ORDER,
@@ -87,7 +92,21 @@ class SearchRequest(BaseModel):
     sort: Literal["relevance", "citations"] = "relevance"
     min_citations: int = 0
     year_from: int | None = None
-    translate: bool = False
+    # Default-on: dual-query (original + English) for non-ASCII keywords, and a
+    # Haiku relevance gate before analysis. Both add only a cheap Haiku call.
+    translate: bool = True
+    relevance_filter: bool = True
+    # On by default: the post-analysis check that each 主要發現 is abstract-
+    # supported. It guards over-claiming — the most citation-damaging failure — and
+    # is only a cheap, cached Haiku call, so it's worth paying for on every run.
+    verify_claims: bool = True
+    # Off by default: paid + network. Pull OA full text (arXiv / Unpaywall) and
+    # extract the authors' stated methods/limitations — breaks the abstract-only
+    # ceiling for the OA subset only.
+    fulltext: bool = False
+    # Off by default: cross-check the topic against existing Taiwan theses via the
+    # official NCL open data (title-level), the Chinese-thesis blind spot.
+    ndltd: bool = False
 
 
 class TermSuggestRequest(BaseModel):
@@ -198,6 +217,28 @@ def download_report(filename: str):
     )
 
 
+_EXPORT_MEDIA = {
+    "bib": "application/x-bibtex",
+    "ris": "application/x-research-info-systems",
+}
+
+
+@app.get("/api/reports/{filename}/export/{fmt}")
+def download_export(filename: str, fmt: str):
+    """Serve the citation export (`.bib`/`.ris`) written next to the report. Only
+    reports produced after this feature shipped have one, so 404 if it's absent."""
+    if fmt not in _EXPORT_MEDIA:
+        raise HTTPException(status_code=400, detail="invalid format")
+    export_path = _report_path(filename).with_suffix(f".{fmt}")
+    if not export_path.exists():
+        raise HTTPException(status_code=404, detail="此報告沒有對應的匯出檔")
+    return Response(
+        content=export_path.read_bytes(),
+        media_type=_EXPORT_MEDIA[fmt],
+        headers={"Content-Disposition": f'attachment; filename="{export_path.name}"'},
+    )
+
+
 @app.post("/api/suggest-terms")
 def suggest_terms(req: TermSuggestRequest):
     try:
@@ -215,22 +256,29 @@ def _run_search_job(
     sort: str,
     min_citations: int,
     year_from: int | None,
-    translate: bool = False,
+    translate: bool = True,
+    relevance_filter: bool = True,
+    verify_claims: bool = True,
+    fulltext: bool = False,
+    ndltd: bool = False,
 ):
     try:
-        query = keyword
+        # Dual-query non-ASCII keywords (original + English), mirroring the CLI.
+        queries = [keyword]
         translated_from = None
         if translate:
             try:
-                query = translate_to_english_query(keyword)
+                translated = translate_to_english_query(keyword)
             except Exception:  # noqa: BLE001 — fall back to the original keyword, don't fail the job
-                query = keyword
-            if query != keyword:
+                translated = keyword
+            if translated and translated != keyword:
+                queries = [keyword, translated]
                 translated_from = keyword
 
-        _set_job(job_id, "searching", f"在 Semantic Scholar、OpenAlex 搜尋「{query}」...")
+        shown = " ＋ ".join(f"「{q}」" for q in queries)
+        _set_job(job_id, "searching", f"在 Semantic Scholar、OpenAlex、arXiv 搜尋 {shown}...")
         result = search(
-            query, limit=limit, sort=sort, min_citations=min_citations, year_from=year_from
+            queries, limit=limit, sort=sort, min_citations=min_citations, year_from=year_from
         )
 
         suggestions = None
@@ -249,6 +297,14 @@ def _run_search_job(
             )
             return
         papers = result.papers
+
+        # Relevance gate before the paid analysis (keeps all on any failure).
+        relevance = None
+        if relevance_filter:
+            relevance = filter_by_relevance(keyword, papers)
+            if relevance.checked:
+                papers = relevance.kept
+
         sparse_note = f"（只找到 {len(papers)} 篇，可參考下方建議關鍵字。）" if suggestions else ""
 
         _set_job(
@@ -259,13 +315,16 @@ def _run_search_job(
         )
         analysis = analyze(keyword, papers, model=model)
         verification = verify_matrix(analysis, papers)
+        claim_check = check_claims(analysis, papers) if verify_claims else None
+        fulltext_notes = extract_fulltext_notes(papers) if fulltext else None
+        ndltd_result = search_theses(keyword) if ndltd else None
 
         _set_job(job_id, "writing", "正在產生報告...")
         report = build_report(
             keyword,
             len(papers),
             analysis,
-            query=query,
+            queries=queries,
             translated_from=translated_from,
             sort=sort,
             min_citations=min_citations,
@@ -273,9 +332,15 @@ def _run_search_job(
             model=model,
             stats=result,
             verification=verification,
+            papers=papers,
+            relevance=relevance,
+            claim_check=claim_check,
+            fulltext=fulltext_notes,
+            ndltd=ndltd_result,
         )
         out_path = unique_report_path(_reports_folder(), keyword)
         out_path.write_text(report, encoding="utf-8")
+        write_exports(out_path, papers)
 
         _set_job(job_id, "done", f"完成！{sparse_note}", report_filename=out_path.name)
     except (SearchError, RuntimeError) as e:
@@ -297,6 +362,10 @@ def start_search(req: SearchRequest, background_tasks: BackgroundTasks):
         req.min_citations,
         req.year_from,
         req.translate,
+        req.relevance_filter,
+        req.verify_claims,
+        req.fulltext,
+        req.ndltd,
     )
     return {"job_id": job_id}
 
