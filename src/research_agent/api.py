@@ -21,6 +21,7 @@ from research_agent.analyzer import DEFAULT_MODEL, analyze
 from research_agent.citations import write_exports
 from research_agent.claim_check import check_claims
 from research_agent.fulltext import extract_fulltext_notes
+from research_agent.ndltd import search_theses
 from research_agent.query import (
     SPARSE_RESULT_THRESHOLD,
     suggest_academic_terms,
@@ -103,6 +104,9 @@ class SearchRequest(BaseModel):
     # extract the authors' stated methods/limitations — breaks the abstract-only
     # ceiling for the OA subset only.
     fulltext: bool = False
+    # Off by default: cross-check the topic against existing Taiwan theses via the
+    # official NCL open data (title-level), the Chinese-thesis blind spot.
+    ndltd: bool = False
 
 
 class TermSuggestRequest(BaseModel):
@@ -256,6 +260,7 @@ def _run_search_job(
     relevance_filter: bool = True,
     verify_claims: bool = True,
     fulltext: bool = False,
+    ndltd: bool = False,
 ):
     try:
         # Dual-query non-ASCII keywords (original + English), mirroring the CLI.
@@ -312,6 +317,7 @@ def _run_search_job(
         verification = verify_matrix(analysis, papers)
         claim_check = check_claims(analysis, papers) if verify_claims else None
         fulltext_notes = extract_fulltext_notes(papers) if fulltext else None
+        ndltd_result = search_theses(keyword) if ndltd else None
 
         _set_job(job_id, "writing", "正在產生報告...")
         report = build_report(
@@ -330,6 +336,7 @@ def _run_search_job(
             relevance=relevance,
             claim_check=claim_check,
             fulltext=fulltext_notes,
+            ndltd=ndltd_result,
         )
         out_path = unique_report_path(_reports_folder(), keyword)
         out_path.write_text(report, encoding="utf-8")
@@ -358,6 +365,7 @@ def start_search(req: SearchRequest, background_tasks: BackgroundTasks):
         req.relevance_filter,
         req.verify_claims,
         req.fulltext,
+        req.ndltd,
     )
     return {"job_id": job_id}
 

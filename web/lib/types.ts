@@ -36,6 +36,9 @@ export type SearchOptions = {
   // Off by default: paid + network. Pull OA full text (arXiv / Unpaywall) and
   // extract authors' stated methods/limitations (OA subset only).
   fulltext: boolean;
+  // Off by default: cross-check the topic against existing Taiwan theses via the
+  // official NCL open data (title-level; downloads CSVs + a Haiku scoring call).
+  ndltd: boolean;
 };
 
 export type JobStatus = "searching" | "analyzing" | "writing" | "done" | "error";

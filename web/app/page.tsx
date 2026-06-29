@@ -237,6 +237,7 @@ export default function Home() {
                 relevanceFilter: true,
                 verifyClaims: true,
                 fulltext: false,
+                ndltd: false,
               },
             };
             handleSearch(keyword, limit, options);

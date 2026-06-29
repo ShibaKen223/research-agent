@@ -80,6 +80,7 @@ export function startSearch(
       relevance_filter: options?.relevanceFilter ?? true,
       verify_claims: options?.verifyClaims ?? true,
       fulltext: options?.fulltext ?? false,
+      ndltd: options?.ndltd ?? false,
     }),
   });
 }

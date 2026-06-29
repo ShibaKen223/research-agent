@@ -15,6 +15,7 @@ src/research_agent/
   verify.py           反幻覺關卡（純程式、不花 API）：解析「文獻矩陣」每一列，(1) 比對是否真的對應到送進模型的論文（正規化＋difflib 模糊比對）；(2) 對已對應的列再**內容核對** metadata——「作者」必須與該論文實際作者有共同姓名 token（否則標為**張冠李戴**），「年份」與實際年份衝突則標記（皆刻意保守，只在零重疊／明確衝突時才報，避免誤殺）。回傳 VerificationResult（含 author_mismatches／year_mismatches）
   claim_check.py      內容支撐檢查（**預設開、會花費**，可用 `--no-verify-claims` 關）：分析後用 Haiku 一次批次，逐列核對「主要發現」是否真有對應論文摘要支撐（0–2 分，只報 0＝摘要不支撐）。揪出 verify.py 抓不到的「過度詮釋／杜撰結論」。**fail-open**＋快取，與 relevance.py 同形狀（`_parse_scores`／`_coerce_int_keys` 是 relevance 的雙生，改一個要同步）。CLI `--verify-claims`、API `verify_claims`
   fulltext.py         OA 全文萃取（**opt-in、會花費＋需網路**，預設關閉，需 `pip install -e ".[fulltext]"` 裝 pypdf）：對開放取用論文（arXiv 直連／Unpaywall by DOI）抓 PDF、抽文字、啟發式取「限制/方法」段，一次 Haiku 批次萃取作者自陳的方法與限制，突破「只讀摘要」天花板（僅 OA 子集、上限 `MAX_FULLTEXT` 篇）。**不做品質評估/RoB/效果量**——只攤出作者自己寫的東西。**fail-open**＋快取＋延遲 import（pypdf／anthropic 缺了也只降級為未檢查）。CLI `--fulltext`、API `fulltext`
+  ndltd.py            臺灣碩博士論文「題目對照」（**opt-in、會花費＋需網路**，預設關閉）：補英文語料庫對中文碩博論文的盲區。抓國家圖書館「臺灣博碩士論文知識加值系統」**官方開放資料**（data.gov.tw dataset 14024，逐學年度 CSV、UTF-8 BOM、每檔 ~18MB），disk-cache 後比對論文**標題**（`_match_score`），再借用 `relevance.filter_by_relevance`（Haiku）評分留切題者，產出「## 臺灣碩博士論文對照」章節。**硬限制要誠實**：開放資料**無摘要/關鍵字 → 只能比標題**（只能說「有沒有人做過類似題目」，不能分析內容）、**只涵蓋最近數學年度**（`MAX_YEARS`、download 上限）。**刻意不併入摘要分析管線**（標題-only 紀錄會毒化 relevance/claim 檢查）。**fail-open**＋disk-cache＋延遲 import relevance（缺 anthropic 也只降級 unscored），純函式（`_header_index`/`_iter_theses`/`_terms`/`_match_score`）離線可測。CLI `--ndltd`、API `ndltd`
   citations.py        從**實際論文 metadata**（非模型產出）產生「## 參考文獻」章節與 BibTeX／RIS 匯出（`write_exports()` 寫出 `<report>.bib`/`.ris`）；DOI/連結/venue 直接取自 metadata，零幻覺風險。刻意不把 DOI 放進 Claude 寫的矩陣，避免模型抄錯
   cache.py            on-disk JSON 快取（`.research_agent_cache/`，可用 `RESEARCH_AGENT_CACHE_DIR` 覆寫）：依輸入對「搜尋／Haiku 相關度／Sonnet 分析」各自快取，重跑同關鍵字免費又即時。`--no-cache` 或 `RESEARCH_AGENT_NO_CACHE=1` 關閉
   text_utils.py       共用的 normalize_doi／normalize_title（去重與驗證共用，獨立模組避免循環 import）
@@ -28,7 +29,7 @@ src/research_agent/
 web/                  Next.js 網頁檢視器（取代舊版 Streamlit viewer），呼叫 api.py 的 HTTP API
 ```
 
-資料流：（非 ASCII 關鍵字預設先 `translate_to_english_query()` 得英譯詞）→ `sources.search([原文, 英譯])`（多來源＋雙查、去重）→ `filter_by_relevance()`（Haiku 剔除離題）→ `analyze()` → `verify_matrix()`（存在性＋作者/年份內容核對）→（預設開，`--no-verify-claims` 可關）`check_claims()`（Haiku 核對主要發現是否有摘要支撐）→（`--fulltext` 時）`extract_fulltext_notes()`（對 OA 論文抓全文、萃取方法/限制）→ `build_report()`（含程式產生的參考文獻）→ 寫入 `<keyword>_report.md`，並 `write_exports()` 寫出 `.bib`/`.ris`。搜尋／相關度／分析／內容支撐檢查都會經 `cache.py` 快取。
+資料流：（非 ASCII 關鍵字預設先 `translate_to_english_query()` 得英譯詞）→ `sources.search([原文, 英譯])`（多來源＋雙查、去重）→ `filter_by_relevance()`（Haiku 剔除離題）→ `analyze()` → `verify_matrix()`（存在性＋作者/年份內容核對）→（預設開，`--no-verify-claims` 可關）`check_claims()`（Haiku 核對主要發現是否有摘要支撐）→（`--fulltext` 時）`extract_fulltext_notes()`（對 OA 論文抓全文、萃取方法/限制）→ `build_report()`（含程式產生的參考文獻）→ 寫入 `<keyword>_report.md`，並 `write_exports()` 寫出 `.bib`/`.ris`。搜尋／相關度／分析／內容支撐檢查都會經 `cache.py` 快取。（`--ndltd` 時另起一條獨立側支 `search_theses()`：抓臺灣碩博士論文開放資料、標題比對＋Haiku 評分，結果以 `ndltd=` 傳入 `build_report()` 自成一章，**不併入上述摘要分析管線**。）
 
 ## 環境設定
 
@@ -36,6 +37,7 @@ web/                  Next.js 網頁檢視器（取代舊版 Streamlit viewer）
 - Semantic Scholar、OpenAlex 與 arXiv API 都不需要 key，但都有 rate limit；遇到 429（arXiv 另含 503 過載）會各自重試（honor Retry-After），重試到頂才拋錯。
 - （可選）設 `OPENALEX_MAILTO=你的email` 可進入 OpenAlex 較快的 polite pool；不設也能用。不要把個人 email 寫死進程式碼。
 - `--fulltext`（OA 全文萃取）需 `pip install -e ".[fulltext]"`（裝 pypdf），且走 Unpaywall 時需設 `UNPAYWALL_EMAIL`（或沿用 `OPENALEX_MAILTO`）；arXiv 直連不需 email。沒裝 pypdf／沒設 email 都只會讓該功能降級略過，不中斷整體流程。
+- `--ndltd`（臺灣碩博士論文對照）抓國圖開放資料 CSV，**不需 key**（但需網路，首次每學年度下載 ~18MB，之後走 disk cache）；下載失敗只降級為「未比對」、不中斷整體流程。預設試最近幾個民國學年度（不存在的新年度自動 404 跳過），可用 `NDLTD_YEARS=113,112,111`（逗號分隔）覆寫要查的學年度。CSV 與相關度分數快取在 `RESEARCH_AGENT_CACHE_DIR`（預設 `.research_agent_cache/`）下的 `ndltd/` 子目錄。
 - 預設會把搜尋／相關度／分析結果快取在工作目錄的 `.research_agent_cache/`（已列入 `.gitignore`），同關鍵字＋參數重跑免費又即時；`--no-cache` 或 `RESEARCH_AGENT_NO_CACHE=1` 可關閉，`RESEARCH_AGENT_CACHE_DIR` 可換位置。離線單元測試（`tests/`）會在 import 時 `cache.disable()`，不碰磁碟。
 
 ## 安裝與執行
@@ -67,9 +69,10 @@ Claude 產出的報告固定包含四個章節（章節標題為中文，分析�
 
 若要調整報告結構，修改 `analyzer.py` 的 `PROMPT_TEMPLATE`。
 
-除了上述四個 Claude 產出的章節，`report.py` 的 `build_report()` 還會在報告末尾自動附加兩個**非 Claude 產出**的章節（都不在 `report_parser.SECTION_ORDER` 內，前端會排在四個固定章節之後當額外分頁）：
+除了上述四個 Claude 產出的章節，`report.py` 的 `build_report()` 還會在報告末尾自動附加數個**非 Claude 產出**的章節（都不在 `report_parser.SECTION_ORDER` 內，前端會排在四個固定章節之後當額外分頁）：
 
 - `## 參考文獻`：由 `citations.reference_list_markdown()` 直接從實際論文 metadata 產生的編號參考清單（作者/年份/標題/venue/DOI 或連結），可直接引用；另寫出 `<report>.bib`/`.ris` 供匯入文獻管理軟體。因為不是模型產出，零幻覺風險。
+- `## 臺灣碩博士論文對照`（**僅 `--ndltd` 時**）：由 `report._thesis_section()` 從 `ndltd.search_theses()` 的結果產生，列出標題與本主題相關的既有臺灣碩博士論文（校系／學年度／學位／作者／指導教授／網址），供查證「題目是否已被做過」。開頭即標明「僅近數學年度、僅標題比對、Haiku 評分」的硬限制；下載失敗／未命中／未能評分都各有誠實降級訊息（「找不到」≠「全無相關研究」）。
 - `## 檢索說明`：記錄檢索式（雙查會列出原文＋英譯）、使用的資料庫、篩選條件、命中/排除/跨來源去重統計、各來源貢獻、**相關度過濾**（剔除幾篇離題、列出剔除標題；若全部偏低會標 inconclusive 警告）、分析模型、納入準則，以及一段「分析驗證」——由 `verify.verify_matrix()` 程式核對「文獻矩陣」每一列是否對應到實際檢索到的論文、且作者/年份是否與 metadata 一致，列出無法對應（疑似杜撰）、作者張冠李戴、年份不符的列。預設還會多一段「內容支撐檢查」列出摘要未支撐的「主要發現」（除非加 `--no-verify-claims`）。若開了 `--fulltext`，再多一段「全文限制與方法（OA 子集）」列出對 OA 論文抓全文萃取到的作者自陳方法/限制。供查證與重現。
 
 ## 慣例
@@ -80,6 +83,7 @@ Claude 產出的報告固定包含四個章節（章節標題為中文，分析�
 - analyzer 的 prompt grounding 只是「要求」，`verify.verify_matrix()` 是「事後查核」（純程式、不花 API）：用標題正規化＋difflib 比對，確認「文獻矩陣」每列都對得上實際論文；對上之後再**內容核對** metadata——作者必須與該論文真實作者有共同姓名 token（零重疊＝張冠李戴）、年份不得與實際年份衝突。對不上／張冠李戴／年份不符的列都會在 CLI 印警告、並在報告「檢索說明」的「分析驗證」標註。比對依賴矩陣標題欄為「標題」、作者欄含「作者」、年份欄含「年」、章節標題為「文獻矩陣」（與 `analyzer.PROMPT_TEMPLATE` 綁定）。作者比對刻意保守（只比 Latin token、只在零重疊時報），避免把「列第二作者」「只寫姓」當成錯誤。
 - **內容支撐檢查**（CLI `--verify-claims/--no-verify-claims`、API `verify_claims`、web 搜尋列「內容支撐檢查（會花費）」開關）預設**開啟**（會花費）：分析後 `claim_check.check_claims()` 用 Haiku 一次批次，把每列「主要發現」與該論文真實摘要逐一比對、評 0–2 分，只報 0（摘要不支撐）的列。這補上 `verify.py` 抓不到的「過度詮釋／杜撰結論」——verify 只證明論文存在且作者/年份對，不證明結論為真。**fail-open**＋快取（與 `relevance.py` 同形狀，`_parse_scores`/`_coerce_int_keys` 是雙生，改一個要同步另一個）。雖每跑多一次 API，但它守的是「過度詮釋」這個對引用傷害最大的失敗，且只是便宜又已快取的 Haiku 呼叫，故預設開啟；仍保留 `--no-verify-claims` escape hatch（「API 預算吃緊」時可關）。
 - **OA 全文萃取**（CLI `--fulltext`、API `fulltext`、web「OA 全文萃取（會花費）」開關）預設**關閉**（會花費＋需網路）：`fulltext.extract_fulltext_notes()` 對開放取用論文抓 PDF（arXiv 直連；其餘有 DOI 者走 Unpaywall，需 `UNPAYWALL_EMAIL`／`OPENALEX_MAILTO`），用 pypdf 抽文字、啟發式取「限制/方法」段，一次 Haiku 批次萃取作者自陳的方法與限制，寫進「檢索說明」的「全文限制與方法（OA 子集）」。**僅 OA 子集、上限 `MAX_FULLTEXT`**，且刻意不做品質評估/RoB/效果量——只把作者自己寫的攤出來，突破「只讀摘要」一層而非消除它。**fail-open**＋快取（仿 `claim_check.py`）；`pypdf` 為選用依賴（`.[fulltext]`），在 `pdf_to_text` 內延遲 import，沒裝就回空字串→降級未檢查。
+- **臺灣碩博士論文對照**（CLI `--ndltd`、API `ndltd`、web「臺灣碩博論文對照（會花費）」開關）預設**關閉**（會花費＋需網路）：`ndltd.search_theses()` 抓國圖「臺灣博碩士論文知識加值系統」官方開放資料（逐學年度 CSV）、disk-cache 後比對論文**標題**，再借用 `relevance.filter_by_relevance`（Haiku）評分留切題者，自成「## 臺灣碩博士論文對照」一章。這是補英文語料庫對**中文碩博論文盲區**的核心防線（針對「研究缺口／碩論題目建議」可能漏看既有中文研究）。**硬限制要守住**：開放資料無摘要 → **只比標題**（只能說「題目是否被做過」、不能分析內容）、只涵蓋最近數學年度；**刻意不併入摘要分析管線**（標題-only 紀錄會毒化 relevance/claim 檢查，故獨立成側支、獨立成章）。**fail-open**：下載失敗→`checked=False`（報告標「下載失敗」）、無法評分→`scored=False`（標「未能評分、可能含離題」）、評分後全離題→空清單但 `scored=True`，皆不中斷整體流程。借用 relevance 評分，故與 `--relevance-filter` 共用同一條 Haiku 評分／快取路徑。
 - 關鍵字翻譯／**雙查**（CLI `--translate/--no-translate`、API `SearchRequest.translate`）預設**開啟**。對非 ASCII（中文）關鍵字，會用 `query.TRANSLATE_MODEL`（Haiku，便宜模型）多呼叫一次 Claude 取得英譯詞，然後**同時用原文與英譯兩條 query 搜尋再合併去重**（`sources.search()` 接受 `str | Sequence[str]`），大幅改善英文語料庫對中文關鍵字「又少又偏」的問題。純英文關鍵字（`keyword.isascii()`）翻成自己、等同單查、不花費。翻譯失敗會退回原關鍵字、不中斷搜尋。報告標題仍用原關鍵字，「檢索說明」附錄會列出兩條檢索式並註明雙查。`--no-translate` 只用原文查。
 - **相關度過濾**（CLI `--relevance-filter/--no-relevance-filter`、API `relevance_filter`、web 搜尋列「相關度過濾」開關）預設**開啟**：搜尋後、送 Sonnet 分析前，`relevance.filter_by_relevance()` 用 Haiku 一次批次為每篇打 0–3 主題相關分，剔除 < `KEEP_THRESHOLD`（離題）的論文。這是針對「關鍵字巧合撈進無關論文、再被寫成漂亮綜述」的核心防線（`verify.py` 只驗論文存在、不驗切題）。**fail-open**：缺金鑰／API 失敗／無法解析／會把全部剔光時，一律保留全部（不中斷），剔除情形與「全部偏低」警告都揭露在「檢索說明」。它會減少送進 Sonnet 的論文數（順帶省分析成本）。
 - **參考文獻與匯出**由 `citations.py` 在 `build_report()`／寫檔後用**程式**從實際 metadata 產生（`## 參考文獻` 章節＋ `<report>.bib`/`.ris`），不經模型，零幻覺。矩陣刻意不放 DOI（避免模型抄錯）；venue 是低風險顯示欄，由 prompt 要求模型照抄清單中的 `venue`。web 報告頁有 BibTeX／RIS 下載鈕（`web/lib/api.ts` 的 `downloadExport()` → 後端 `/api/reports/{name}/export/{fmt}`，舊報告若無匯出檔會回 404、前端以 alert 提示而非導去錯誤頁）。

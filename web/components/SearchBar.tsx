@@ -25,6 +25,8 @@ export function SearchBar({ onSearch, disabled }: Props) {
   const [verifyClaims, setVerifyClaims] = useState(true);
   // Off by default: paid + network (downloads OA PDFs, one Haiku call).
   const [fulltext, setFulltext] = useState(false);
+  // Off by default: downloads NCL open-data CSVs + a Haiku scoring call.
+  const [ndltd, setNdltd] = useState(false);
   const [terms, setTerms] = useState<AcademicTerm[] | null>(null);
   const [loadingTerms, setLoadingTerms] = useState(false);
   const [termsError, setTermsError] = useState<string | null>(null);
@@ -58,6 +60,7 @@ export function SearchBar({ onSearch, disabled }: Props) {
             relevanceFilter,
             verifyClaims,
             fulltext,
+            ndltd,
           });
         }
       }}
@@ -188,6 +191,16 @@ export function SearchBar({ onSearch, disabled }: Props) {
           title="對開放取用論文（arXiv／Unpaywall）抓取全文，用 Haiku 萃取作者自陳的「方法與限制」，突破只讀摘要的限制。僅涵蓋 OA 論文、上限數篇，且需下載 PDF；預設關閉。"
           on={fulltext}
           onToggle={() => setFulltext((v) => !v)}
+          onText="已開"
+          offText="關"
+          disabled={disabled}
+        />
+
+        <Toggle
+          label="臺灣碩博論文對照（會花費）"
+          title="比對國家圖書館「臺灣博碩士論文知識加值系統」官方開放資料近數學年度的論文標題，列出與關鍵字相關的既有碩博士論文（僅標題、Haiku 評分），補足英文資料庫對中文碩博論文的盲區、供題目新穎性查證。首次會下載開放資料、較慢；預設關閉。"
+          on={ndltd}
+          onToggle={() => setNdltd((v) => !v)}
           onText="已開"
           offText="關"
           disabled={disabled}

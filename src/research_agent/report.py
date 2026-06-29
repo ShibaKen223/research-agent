@@ -93,6 +93,7 @@ def build_report(
     relevance=None,
     claim_check=None,
     fulltext=None,
+    ndltd=None,
 ) -> str:
     """Assemble the final report.
 
@@ -129,6 +130,9 @@ def build_report(
     if papers:
         body += "\n" + citations.reference_list_markdown(papers)
 
+    if ndltd is not None:
+        body += "\n" + _thesis_section(ndltd)
+
     if queries:
         body += "\n" + _search_appendix(
             queries=queries,
@@ -145,6 +149,58 @@ def build_report(
             fulltext=fulltext,
         )
     return body
+
+
+def _thesis_section(ndltd) -> str:
+    """Render the program-built `## 臺灣碩博士論文對照` section from a
+    `ndltd.ThesisCrossCheckResult` — existing Taiwan theses whose titles match the
+    topic, for a novelty cross-check the abstract-based sources can't provide."""
+    lines = ["## 臺灣碩博士論文對照", ""]
+    lines.append(
+        "以國家圖書館「臺灣博碩士論文知識加值系統」官方開放資料比對論文標題，"
+        "列出與本主題相關的既有碩博士論文，供查證「題目是否已被做過」。"
+        "**僅比對最近數個學年度、且僅依標題（此開放資料不含摘要），相關度由 Haiku 評分**——"
+        "因此這是「有沒有人做過類似題目」的線索，不是內容層級的分析。"
+    )
+    lines.append("")
+    if not ndltd.checked:
+        lines += ["> ⚠️ 開放資料下載失敗，本次未能比對（不影響其他章節）。", ""]
+        return "\n".join(lines)
+
+    years = "、".join(str(y) for y in ndltd.years) or "—"
+    lines.append(f"- 比對學年度（民國）：{years}")
+    if ndltd.scored:
+        lines.append(f"- 標題命中：{ndltd.matched} 筆；經 Haiku 相關評分後列出：{len(ndltd.theses)} 筆")
+    else:
+        lines.append(
+            f"- 標題命中：{ndltd.matched} 筆；⚠️ 未能評分，以下為標題命中（可能含離題）：{len(ndltd.theses)} 筆"
+        )
+    lines.append("")
+
+    if not ndltd.theses:
+        lines += [
+            "在比對的學年度內，未找到標題與本主題相關的碩博士論文。"
+            "（注意：僅近數年、僅標題比對，並非「全無相關研究」的證明。）",
+            "",
+        ]
+        return "\n".join(lines)
+
+    for i, t in enumerate(ndltd.theses, 1):
+        title = t.get("title") or "（無題名）"
+        meta = "·".join(x for x in (t.get("school", ""), t.get("dept", "")) if x)
+        yd = ((f"{t['year']} 學年度" if t.get("year") else "") + (f" {t['degree']}" if t.get("degree") else "")).strip()
+        who = (t.get("author") or "") + (f"（指導：{t['advisor']}）" if t.get("advisor") else "")
+        seg = "，".join(x for x in (meta, yd, who) if x)
+        line = f"{i}. **{title}**"
+        if t.get("title_en"):
+            line += f"（{t['title_en']}）"
+        if seg:
+            line += f" — {seg}。"
+        if t.get("url"):
+            line += f" {t['url']}"
+        lines.append(line)
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _search_appendix(

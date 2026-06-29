@@ -11,6 +11,7 @@ from research_agent.analyzer import DEFAULT_MODEL, analyze
 from research_agent.citations import write_exports
 from research_agent.claim_check import check_claims
 from research_agent.fulltext import extract_fulltext_notes
+from research_agent.ndltd import search_theses
 from research_agent.query import (
     SPARSE_RESULT_THRESHOLD,
     suggest_academic_terms,
@@ -67,6 +68,14 @@ from research_agent.verify import verify_matrix
     "預設關閉。需設 UNPAYWALL_EMAIL 或 OPENALEX_MAILTO 才會走 Unpaywall。",
 )
 @click.option(
+    "--ndltd/--no-ndltd",
+    default=False,
+    show_default=True,
+    help="（會花費、需下載官方開放資料）比對國家圖書館「臺灣博碩士論文知識加值系統」"
+    "近數學年度的論文標題，列出與關鍵字相關的既有碩博士論文（僅標題層級、Haiku 評分），"
+    "補足英文資料庫對中文碩博論文的盲區、供題目新穎性查證。預設關閉。",
+)
+@click.option(
     "--no-cache",
     is_flag=True,
     default=False,
@@ -97,6 +106,7 @@ def main(
     relevance_filter: bool,
     verify_claims: bool,
     fulltext: bool,
+    ndltd: bool,
     no_cache: bool,
     suggest_terms: bool,
     output_path: str | None,
@@ -252,6 +262,21 @@ def main(
         else:
             click.echo("（全文萃取：沒有可用的 OA 全文或未能執行，略過。）")
 
+    # Opt-in: cross-check the topic against existing Taiwan theses (official open
+    # data), the Chinese-thesis blind spot of the English-leaning sources.
+    ndltd_result = None
+    if ndltd:
+        click.echo("臺灣碩博士論文對照：比對國圖開放資料的論文標題...")
+        ndltd_result = search_theses(keyword)
+        if ndltd_result.checked:
+            yrs = "、".join(str(y) for y in ndltd_result.years)
+            click.echo(
+                f"臺灣碩博士論文對照：標題命中 {ndltd_result.matched} 筆，"
+                f"列出 {len(ndltd_result.theses)} 筆（學年度 {yrs}）。"
+            )
+        else:
+            click.echo("（臺灣碩博士論文對照：開放資料下載失敗或無資料，略過。）")
+
     report = build_report(
         keyword,
         len(papers),
@@ -268,6 +293,7 @@ def main(
         relevance=relevance,
         claim_check=claim_check,
         fulltext=fulltext_notes,
+        ndltd=ndltd_result,
     )
 
     out_path = Path(output_path) if output_path else unique_report_path(Path.cwd(), keyword)
