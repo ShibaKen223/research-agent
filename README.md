@@ -147,6 +147,8 @@ cd web && npm install && cd ..
 | 安裝套件 | `pip install -e ".[view]"`（相同） | `pip install -e ".[view]"`（相同） |
 | 使用 | `research-agent` / `research-agent-view`（相同） | `research-agent` / `research-agent-view`（相同） |
 
+**桌面捷徑（Mac）**：專案根目錄的 `start-research-agent.command` 可直接在 Finder 雙擊啟動檢視器。要放到桌面，請在 Finder 對它按右鍵 →「製作替身」，再把替身拖到桌面（不要把 `.command` 本身搬走或複製出去，它要待在專案資料夾裡才找得到 `.venv` 與 `web/`）。若之後搬動或改名專案資料夾，舊替身會失效（出現「找不到原項目」），重做一次替身即可。第一次雙擊若被 macOS 擋下，改用右鍵 →「打開」。
+
 ## 前置準備（本機已設定好，僅供參考）
 
 上面「從新電腦安裝」是完整流程；這台電腦其實已經做完了，平常只要用上面的四行口訣即可。
