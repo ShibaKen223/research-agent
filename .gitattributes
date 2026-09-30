@@ -1,0 +1,4 @@
+# Windows cmd misparses LF-only batch files (esp. with non-ASCII text on
+# cp950/Big5 systems), so always check out .bat/.cmd with CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
